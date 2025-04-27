@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # React + Vite
 
 This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
@@ -10,3 +11,7 @@ Currently, two official plugins are available:
 ## Expanding the ESLint configuration
 
 If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+=======
+# EatMove-Project
+A database-driven food delivery platform project inspired by Uber Eats. Built for the Database Management course final project, aiming to simulate real-world delivery services including restaurant listings, order tracking, and driver assignments.
+>>>>>>> 44d054143db24c4e7ab69b15b160adbeb2cac2cf
