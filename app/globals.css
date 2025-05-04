@@ -1,0 +1,152 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 160 30% 98%;
+    --foreground: 175 30% 15%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 175 30% 15%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 175 30% 15%;
+
+    --primary: 12 100% 60%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 172 60% 48%;
+    --secondary-foreground: 0 0% 100%;
+
+    --muted: 172 10% 90%;
+    --muted-foreground: 175 10% 40%;
+
+    --accent: 35 100% 55%;
+    --accent-foreground: 0 0% 100%;
+
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 0 0% 98%;
+
+    --border: 175 5% 85%;
+    --input: 175 5% 85%;
+    --ring: 12 100% 60%;
+
+    --radius: 0.75rem;
+  }
+
+  .dark {
+    --background: 175 30% 10%;
+    --foreground: 0 0% 98%;
+
+    --card: 175 30% 15%;
+    --card-foreground: 0 0% 98%;
+
+    --popover: 175 30% 15%;
+    --popover-foreground: 0 0% 98%;
+
+    --primary: 12 100% 60%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 172 60% 48%;
+    --secondary-foreground: 0 0% 100%;
+
+    --muted: 175 20% 20%;
+    --muted-foreground: 175 10% 70%;
+
+    --accent: 35 100% 55%;
+    --accent-foreground: 0 0% 100%;
+
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 0 0% 98%;
+
+    --border: 175 20% 25%;
+    --input: 175 20% 25%;
+    --ring: 12 100% 60%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+}
+
+/* 自定義動畫和過渡效果 */
+.card-hover {
+  @apply transition-all duration-300 hover:shadow-lg hover:-translate-y-1;
+}
+
+.gradient-text {
+  @apply bg-clip-text text-transparent bg-gradient-to-r from-brand-primary to-brand-accent;
+}
+
+.gradient-bg {
+  @apply bg-gradient-to-r from-brand-primary to-brand-accent;
+}
+
+/* 食物類別標籤樣式 */
+.category-tag {
+  @apply px-4 py-2 rounded-full transition-all duration-300 font-medium text-sm;
+}
+
+.category-tag.active {
+  @apply bg-brand-primary text-white shadow-md;
+}
+
+.category-tag:not(.active) {
+  @apply bg-muted text-muted-foreground hover:bg-brand-primary/10 hover:text-brand-primary;
+}
+
+/* 頁面過渡效果 */
+.page-transition-enter {
+  opacity: 0;
+  transform: translateY(10px);
+}
+
+.page-transition-enter-active {
+  opacity: 1;
+  transform: translateY(0);
+  transition: opacity 300ms, transform 300ms;
+}
+
+.page-transition-exit {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.page-transition-exit-active {
+  opacity: 0;
+  transform: translateY(-10px);
+  transition: opacity 300ms, transform 300ms;
+}
+
+/* 餐廳卡片動畫效果 */
+@keyframes pulse-favorite {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.15);
+  }
+}
+
+.favorite-pulse {
+  animation: pulse-favorite 0.5s ease-in-out;
+}
+
+.card-image-zoom {
+  overflow: hidden;
+}
+
+.card-image-zoom img {
+  transition: transform 0.5s ease;
+}
+
+.card-image-zoom:hover img {
+  transform: scale(1.05);
+}
