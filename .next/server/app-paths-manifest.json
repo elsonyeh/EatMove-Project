@@ -1,1 +1,24 @@
-{}
+{
+  "/_not-found/page": "app/_not-found/page.js",
+  "/api/chat/route": "app/api/chat/route.js",
+  "/page": "app/page.js",
+  "/login/page": "app/login/page.js",
+  "/register/page": "app/register/page.js",
+  "/delivery/dashboard/page": "app/delivery/dashboard/page.js",
+  "/delivery/settings/page": "app/delivery/settings/page.js",
+  "/delivery/orders/[id]/page": "app/delivery/orders/[id]/page.js",
+  "/user/favorites/page": "app/user/favorites/page.js",
+  "/user/cart/page": "app/user/cart/page.js",
+  "/user/orders/[id]/page": "app/user/orders/[id]/page.js",
+  "/user/recent/page": "app/user/recent/page.js",
+  "/user/home/page": "app/user/home/page.js",
+  "/user/restaurant/[id]/page": "app/user/restaurant/[id]/page.js",
+  "/user/checkout/page": "app/user/checkout/page.js",
+  "/restaurant/dashboard/page": "app/restaurant/dashboard/page.js",
+  "/user/payment/page": "app/user/payment/page.js",
+  "/restaurant/products/page": "app/restaurant/products/page.js",
+  "/restaurant/settings/page": "app/restaurant/settings/page.js",
+  "/user/orders/page": "app/user/orders/page.js",
+  "/user/settings/page": "app/user/settings/page.js",
+  "/user/profile/page": "app/user/profile/page.js"
+}
