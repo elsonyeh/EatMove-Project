@@ -78,7 +78,7 @@ export function RestaurantCard({ restaurant, isFavorite: initialIsFavorite }: Re
             />
           </button>
 
-          {/* 新店標籤 */}
+          {/* 新店標��� */}
           {isNew && (
             <div className="absolute top-3 left-3 z-10">
               <Badge className="bg-green-500 hover:bg-green-600 text-white font-medium px-2.5 py-1">新店</Badge>

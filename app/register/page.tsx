@@ -4,7 +4,6 @@ import type React from "react"
 
 import { useState } from "react"
 import { useRouter } from "next/navigation"
-import Image from "next/image"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -12,6 +11,7 @@ import { Label } from "@/components/ui/label"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { useToast } from "@/components/ui/use-toast"
+import { BrandLogo } from "@/components/brand-logo"
 
 export default function RegisterPage() {
   const router = useRouter()
@@ -56,13 +56,9 @@ export default function RegisterPage() {
     <div className="flex min-h-screen flex-col items-center justify-center bg-gradient-to-b from-slate-50 to-slate-100 p-4">
       <div className="w-full max-w-md">
         <div className="mb-8 flex flex-col items-center text-center">
-          <Image
-            src="/placeholder.svg?height=80&width=80"
-            width={80}
-            height={80}
-            alt="美食外送平台 Logo"
-            className="mb-4"
-          />
+          <div className="mb-4">
+            <BrandLogo size="lg" />
+          </div>
           <h1 className="text-3xl font-bold">註冊帳號</h1>
           <p className="text-muted-foreground">加入我們的美食外送平台</p>
         </div>
