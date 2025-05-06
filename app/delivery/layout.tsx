@@ -1,23 +1,29 @@
 import type React from "react"
-import { DeliveryNav } from "@/components/delivery-nav"
-import { UserNav } from "@/components/user-nav"
+import type { Metadata } from "next"
+import { Nunito } from "next/font/google"
+import "@/globals.css"
+import { ThemeProvider } from "@/components/theme-provider"
 
-export default function DeliveryLayout({
+const nunito = Nunito({ subsets: ["latin"] })
+
+export const metadata: Metadata = {
+  title: "EatMove - 美食外送平台",
+  description: "EatMove - 連接美食與您的生活，快速送達您的味蕾",
+    generator: 'v0.dev'
+}
+
+export default function RootLayout({
   children,
-}: {
+}: Readonly<{
   children: React.ReactNode
-}) {
+}>) {
   return (
-    <div className="flex min-h-screen flex-col">
-      <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-        <div className="container flex h-16 items-center">
-          <DeliveryNav />
-          <div className="ml-auto flex items-center space-x-4">
-            <UserNav />
-          </div>
-        </div>
-      </header>
-      <main className="flex-1">{children}</main>
-    </div>
+    <html lang="zh-TW" suppressHydrationWarning>
+      <body className={nunito.className}>
+        <ThemeProvider attribute="class" defaultTheme="light" enableSystem disableTransitionOnChange>
+          {children}
+        </ThemeProvider>
+      </body>
+    </html>
   )
 }
