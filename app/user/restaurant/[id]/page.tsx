@@ -11,17 +11,23 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { getRestaurantById, getMenuItems } from "@/lib/data"
 import { useToast } from "@/components/ui/use-toast"
 import { useFavorites } from "@/hooks/use-favorites"
+import { useRecentViews } from "@/hooks/use-recent-views" // 引入新的hook
 import { MenuItemCard } from "@/components/menu-item-card"
+import { DishRecommender } from "@/components/dish-recommender"
+import { getRestaurantCover, getMenuItemImage } from "@/utils/image-utils"
+import { useCart } from "@/hooks/use-cart"
 
 export default function RestaurantPage() {
   const params = useParams()
   const { toast } = useToast()
   const { favorites, addFavorite, removeFavorite, isFavorite } = useFavorites()
+  const { addRecentView } = useRecentViews() // 使用近期瀏覽hook
   const [restaurant, setRestaurant] = useState<any>(null)
   const [menu, setMenu] = useState<any[]>([])
   const [activeCategory, setActiveCategory] = useState<string>("all")
   const [loading, setLoading] = useState(true)
-  const [cartItems, setCartItems] = useState<Record<string, number>>({})
+  const { addItem, getTotalItems } = useCart()
+  const [cartItems, setCartItems] = useState<{ [itemId: string]: number }>({})
 
   useEffect(() => {
     // 模擬加載數據
@@ -32,13 +38,18 @@ export default function RestaurantPage() {
       if (foundRestaurant) {
         setRestaurant(foundRestaurant)
         setMenu(restaurantMenu)
+
+        // 將店家添加到近期瀏覽
+        addRecentView(foundRestaurant)
       }
 
       setLoading(false)
     }, 500)
 
     return () => clearTimeout(timer)
-  }, [params.id])
+  }, [params.id, addRecentView])
+
+  // 其餘代碼保持不變...
 
   const handleToggleFavorite = () => {
     if (!restaurant) return
@@ -61,15 +72,16 @@ export default function RestaurantPage() {
   }
 
   const addToCart = (itemId: string) => {
-    setCartItems((prev) => ({
-      ...prev,
-      [itemId]: (prev[itemId] || 0) + 1,
-    }))
+    const item = menu.find((item) => item.id === itemId)
+    if (!item) return
 
-    toast({
-      title: "已加入購物車",
-      description: "商品已成功加入購物車",
-      variant: "default",
+    addItem({
+      id: item.id,
+      name: item.name,
+      price: item.price,
+      image: item.image || getMenuItemImage(item.name),
+      restaurantId: restaurant.id,
+      restaurantName: restaurant.name,
     })
   }
 
@@ -145,7 +157,7 @@ export default function RestaurantPage() {
       {/* 餐廳封面 */}
       <div className="relative h-64 w-full bg-gray-300 mb-4">
         <Image
-          src={`/placeholder.svg?height=256&width=1024&text=${encodeURIComponent(restaurant.name)}`}
+          src={getRestaurantCover(restaurant.name) || "/placeholder.svg"}
           alt={restaurant.name}
           fill
           className="object-cover"
@@ -183,6 +195,9 @@ export default function RestaurantPage() {
         <div className="flex flex-col lg:flex-row gap-6">
           {/* 左側內容區域 */}
           <div className="w-full lg:w-8/12">
+            {/* AI 推薦 */}
+            <DishRecommender restaurantName={restaurant.name} cuisine={restaurant.cuisine} menu={menu} />
+
             {/* 標籤切換 */}
             <Tabs
               value={activeCategory === "all" ? "menu" : activeCategory}
@@ -314,11 +329,11 @@ export default function RestaurantPage() {
       </div>
 
       {/* 購物車按鈕 */}
-      {getTotalCartItems() > 0 && (
+      {getTotalItems() > 0 && (
         <div className="fixed bottom-0 left-0 right-0 bg-white border-t p-4 z-50">
           <div className="container">
             <Button className="w-full bg-orange-500 hover:bg-orange-600" size="lg" asChild>
-              <Link href="/user/cart">查看購物車 ({getTotalCartItems()} 件商品)</Link>
+              <Link href="/user/cart">查看購物車 ({getTotalItems()} 件商品)</Link>
             </Button>
           </div>
         </div>

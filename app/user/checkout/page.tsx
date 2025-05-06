@@ -12,26 +12,58 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { Separator } from "@/components/ui/separator"
 import { Textarea } from "@/components/ui/textarea"
 import { useToast } from "@/components/ui/use-toast"
-import { cartItems } from "@/lib/data"
+import { useCart } from "@/hooks/use-cart"
 
 export default function UserCheckoutPage() {
   const router = useRouter()
   const { toast } = useToast()
   const [paymentMethod, setPaymentMethod] = useState("cash")
+  const { cart, getSubtotal, clearCart, mounted } = useCart()
 
-  const subtotal = cartItems.reduce((sum, item) => sum + item.price * item.quantity, 0)
+  // 計算訂單金額
+  const subtotal = getSubtotal()
   const deliveryFee = 60
   const total = subtotal + deliveryFee
 
+  // 修改handleSubmitOrder函數，先導向訂單詳情頁，再清空購物車
   const handleSubmitOrder = (e: React.FormEvent) => {
     e.preventDefault()
+
+    // 生成訂單ID (這裡使用簡單的隨機數字)
+    const orderId = Math.floor(Math.random() * 1000)
+      .toString()
+      .padStart(3, "0")
 
     toast({
       title: "訂單已送出",
       description: "您的訂單已成功送出，店家正在準備中",
     })
 
-    router.push("/user/orders/123")
+    // 先導向訂單詳情頁，再清空購物車
+    router.push(`/user/orders/${orderId}`)
+
+    // 延遲清空購物車，確保導航完成後再清空
+    setTimeout(() => {
+      clearCart()
+    }, 500)
+  }
+
+  // 等待客戶端渲染
+  if (!mounted) {
+    return (
+      <div className="container py-6">
+        <div className="mb-8">
+          <h1 className="text-3xl font-bold tracking-tight mb-2">結帳</h1>
+          <p className="text-muted-foreground">載入中...</p>
+        </div>
+      </div>
+    )
+  }
+
+  // 如果購物車為空，導回購物車頁面
+  if (cart.items.length === 0) {
+    router.push("/user/cart")
+    return null
   }
 
   return (
@@ -134,7 +166,7 @@ export default function UserCheckoutPage() {
               <CardTitle>訂單摘要</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              {cartItems.map((item) => (
+              {cart.items.map((item) => (
                 <div key={item.id} className="flex justify-between">
                   <span>
                     {item.name} x {item.quantity}

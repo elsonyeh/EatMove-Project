@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { useToast } from "@/components/ui/use-toast"
 import { User, Settings, History, LogOut, CreditCard } from "lucide-react"
+import { getUserAvatar } from "@/utils/image-utils"
 
 export function UserNav() {
   const router = useRouter()
@@ -34,7 +35,7 @@ export function UserNav() {
       <DropdownMenuTrigger asChild>
         <Button variant="ghost" className="relative h-10 w-10 rounded-full">
           <Avatar className="h-10 w-10 border-2 border-brand-primary/20">
-            <AvatarImage src="/placeholder.svg?height=40&width=40&text=User001" alt="User001" />
+            <AvatarImage src={getUserAvatar("User001") || "/placeholder.svg"} alt="User001" />
             <AvatarFallback className="bg-brand-primary/10 text-brand-primary">U1</AvatarFallback>
           </Avatar>
         </Button>

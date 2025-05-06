@@ -12,6 +12,7 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { useToast } from "@/components/ui/use-toast"
 import { BrandLogo } from "@/components/brand-logo"
+import { restaurantAccounts } from "@/lib/restaurant-accounts"
 
 export default function LoginPage() {
   const router = useRouter()
@@ -19,32 +20,63 @@ export default function LoginPage() {
   const [userType, setUserType] = useState("user")
   const [username, setUsername] = useState("")
   const [password, setPassword] = useState("")
+  const [isLoading, setIsLoading] = useState(false)
+  const [error, setError] = useState("")
 
-  const handleLogin = (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
+    setError("")
 
     if (!username || !password) {
-      toast({
-        title: "登入失敗",
-        description: "請輸入帳號和密碼",
-        variant: "destructive",
-      })
+      setError("請輸入帳號和密碼")
       return
     }
 
-    // 模擬登入成功
-    toast({
-      title: "登入成功",
-      description: "歡迎回來！",
-    })
+    setIsLoading(true)
 
-    // 根據用戶類型導向不同頁面
-    if (userType === "user") {
-      router.push("/user/home")
-    } else if (userType === "restaurant") {
-      router.push("/restaurant/dashboard")
-    } else if (userType === "delivery") {
-      router.push("/delivery/dashboard")
+    try {
+      // 模擬API請求延遲
+      await new Promise((resolve) => setTimeout(resolve, 800))
+
+      if (userType === "restaurant") {
+        // 檢查餐廳帳號密碼
+        const account = restaurantAccounts.find(
+          (account) => account.username === username && account.password === password,
+        )
+
+        if (account) {
+          // 儲存登入資訊到 localStorage
+          localStorage.setItem("restaurantAccount", JSON.stringify(account))
+
+          toast({
+            title: "登入成功",
+            description: `歡迎回來，${account.restaurantName}`,
+          })
+
+          // 直接導向店家儀表板
+          router.push("/restaurant/dashboard")
+          return
+        } else {
+          setError("帳號或密碼錯誤")
+        }
+      } else {
+        // 處理用戶或外送員登入
+        toast({
+          title: "登入成功",
+          description: "歡迎回來！",
+        })
+
+        // 根據用戶類型導向不同頁面
+        if (userType === "user") {
+          router.push("/user/home")
+        } else if (userType === "delivery") {
+          router.push("/delivery/dashboard")
+        }
+      }
+    } catch (error) {
+      setError("登入時發生錯誤，請稍後再試")
+    } finally {
+      setIsLoading(false)
     }
   }
 
@@ -74,12 +106,13 @@ export default function LoginPage() {
                 {userType === "user"
                   ? "登入您的帳號以開始訂購美食"
                   : userType === "restaurant"
-                    ? "登入您的店家帳號以管理訂單"
+                    ? "登入您的店家帳號以管理訂單和商品"
                     : "登入您的外送員帳號以接收訂單"}
               </CardDescription>
             </CardHeader>
             <CardContent>
               <form onSubmit={handleLogin} className="space-y-4">
+                {error && <div className="p-3 text-sm text-red-500 bg-red-50 rounded-md">{error}</div>}
                 <div className="space-y-2">
                   <Label htmlFor="username">帳號</Label>
                   <Input
@@ -99,8 +132,8 @@ export default function LoginPage() {
                     onChange={(e) => setPassword(e.target.value)}
                   />
                 </div>
-                <Button type="submit" className="w-full">
-                  登入
+                <Button type="submit" className="w-full" disabled={isLoading}>
+                  {isLoading ? "登入中..." : "登入"}
                 </Button>
               </form>
             </CardContent>

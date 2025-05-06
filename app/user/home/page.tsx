@@ -62,11 +62,16 @@ export default function UserHomePage() {
 
     setFilteredRestaurants(results)
 
-    // 更新URL參數
-    const params = new URLSearchParams()
+    // 更新URL參數，但不進行頁面跳轉
+    const params = new URLSearchParams(searchParams.toString())
     if (query) params.set("q", query)
+    else params.delete("q")
+
     if (category !== "all") params.set("category", category)
-    router.replace(params.toString() ? `?${params.toString()}` : "/user/home")
+    else params.delete("category")
+
+    // 使用 router.replace 而不是 router.push 來避免頁面重新加載
+    router.replace(`/user/home${params.toString() ? `?${params.toString()}` : ""}`, { scroll: false })
 
     setTimeout(() => setIsSearching(false), 300)
   }

@@ -101,52 +101,11 @@
   @apply bg-muted text-muted-foreground hover:bg-brand-primary/10 hover:text-brand-primary;
 }
 
-/* 頁面過渡效果 */
-.page-transition-enter {
-  opacity: 0;
-  transform: translateY(10px);
+/* 在文件末尾添加以下樣式 */
+input::placeholder {
+  color: rgba(0, 0, 0, 0.5);
 }
 
-.page-transition-enter-active {
-  opacity: 1;
-  transform: translateY(0);
-  transition: opacity 300ms, transform 300ms;
-}
-
-.page-transition-exit {
-  opacity: 1;
-  transform: translateY(0);
-}
-
-.page-transition-exit-active {
-  opacity: 0;
-  transform: translateY(-10px);
-  transition: opacity 300ms, transform 300ms;
-}
-
-/* 餐廳卡片動畫效果 */
-@keyframes pulse-favorite {
-  0%,
-  100% {
-    transform: scale(1);
-  }
-  50% {
-    transform: scale(1.15);
-  }
-}
-
-.favorite-pulse {
-  animation: pulse-favorite 0.5s ease-in-out;
-}
-
-.card-image-zoom {
-  overflow: hidden;
-}
-
-.card-image-zoom img {
-  transition: transform 0.5s ease;
-}
-
-.card-image-zoom:hover img {
-  transform: scale(1.05);
+input {
+  color: black;
 }

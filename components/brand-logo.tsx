@@ -1,5 +1,6 @@
 import Link from "next/link"
-import { Utensils, ArrowRight, BikeIcon as Motorcycle } from "lucide-react"
+import { Utensils, ArrowRight } from "lucide-react"
+import { DeliveryMotorcycleIcon } from "./delivery-motorcycle-icon"
 
 interface BrandLogoProps {
   variant?: "default" | "simple"
@@ -28,7 +29,7 @@ export function BrandLogo({ variant = "default", size = "md", href = "/user/home
             className={`${size === "sm" ? "h-3 w-3" : size === "md" ? "h-4 w-4" : "h-5 w-5"} text-brand-secondary mx-0.5`}
           />
           <span className="text-brand-secondary">Move</span>
-          <Motorcycle
+          <DeliveryMotorcycleIcon
             className={`${size === "sm" ? "h-5 w-5" : size === "md" ? "h-6 w-6" : "h-8 w-8"} text-brand-secondary ml-1`}
           />
         </div>

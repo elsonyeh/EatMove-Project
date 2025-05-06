@@ -10,6 +10,7 @@ import { useState } from "react"
 import { useFavorites } from "@/hooks/use-favorites"
 import { Badge } from "@/components/ui/badge"
 import type { Restaurant } from "@/lib/data"
+import { getRestaurantCover } from "@/utils/image-utils"
 
 interface RestaurantCardProps {
   restaurant: Restaurant
@@ -57,10 +58,12 @@ export function RestaurantCard({ restaurant, isFavorite: initialIsFavorite }: Re
         {/* 圖片容器 */}
         <div className="relative overflow-hidden aspect-[4/3]">
           <Image
-            src={`/placeholder.svg?key=fyxje&height=192&width=384&text=${encodeURIComponent(name)}`}
+            src={getRestaurantCover(name) || "/placeholder.svg"}
             alt={name}
             fill
             className="object-cover transition-transform duration-500 group-hover:scale-105"
+            loading="lazy"
+            sizes="(max-width: 640px) 100vw, (max-width: 768px) 50vw, (max-width: 1024px) 33vw, 25vw"
           />
 
           {/* 收藏按鈕 */}
@@ -78,7 +81,7 @@ export function RestaurantCard({ restaurant, isFavorite: initialIsFavorite }: Re
             />
           </button>
 
-          {/* 新店標��� */}
+          {/* 新店標 */}
           {isNew && (
             <div className="absolute top-3 left-3 z-10">
               <Badge className="bg-green-500 hover:bg-green-600 text-white font-medium px-2.5 py-1">新店</Badge>

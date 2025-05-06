@@ -49,7 +49,7 @@ export function RestaurantAuthProvider({ children }: { children: ReactNode }) {
         } else {
           // 無效帳號，清除 localStorage
           localStorage.removeItem("restaurantAccount")
-          router.push("/restaurant/login")
+          router.push("/login?type=restaurant")
         }
       } catch (error) {
         console.error("Failed to parse restaurant account:", error)
@@ -57,7 +57,7 @@ export function RestaurantAuthProvider({ children }: { children: ReactNode }) {
       }
     } else {
       // 未登入，導向登入頁
-      router.push("/restaurant/login")
+      router.push("/login?type=restaurant")
     }
 
     setIsLoading(false)
@@ -66,7 +66,7 @@ export function RestaurantAuthProvider({ children }: { children: ReactNode }) {
   const logout = () => {
     localStorage.removeItem("restaurantAccount")
     setAccount(null)
-    router.push("/restaurant/login")
+    router.push("/login?type=restaurant")
   }
 
   return (

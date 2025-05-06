@@ -2,16 +2,17 @@
 
 import { useState, useEffect } from "react"
 import { useLocalStorage } from "@/hooks/use-local-storage"
+import type { Restaurant } from "@/lib/data"
 
 export function useFavorites() {
-  const [favorites, setFavorites] = useLocalStorage<any[]>("eatmove-favorites", [])
+  const [favorites, setFavorites] = useLocalStorage<Restaurant[]>("eatmove-favorites", [])
   const [isLoaded, setIsLoaded] = useState(false)
 
   useEffect(() => {
     setIsLoaded(true)
   }, [])
 
-  const addFavorite = (restaurant: any) => {
+  const addFavorite = (restaurant: Restaurant) => {
     if (!isLoaded) return
 
     // 檢查是否已經在收藏中

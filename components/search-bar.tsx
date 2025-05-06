@@ -47,7 +47,7 @@ export function SearchBar({ onSearch, initialQuery = "", initialLocation = "台�
           <Input
             type="search"
             placeholder="搜尋餐廳或美食類型..."
-            className="pl-10 pr-10 py-6 border-brand-primary/20 focus-visible:ring-brand-primary"
+            className="pl-10 pr-10 py-6 border-brand-primary/20 focus-visible:ring-brand-primary text-black"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
           />
@@ -67,7 +67,7 @@ export function SearchBar({ onSearch, initialQuery = "", initialLocation = "台�
           <Input
             type="text"
             placeholder="您的位置"
-            className="pl-10 pr-4 py-6 border-brand-secondary/20 focus-visible:ring-brand-secondary"
+            className="pl-10 pr-4 py-6 border-brand-secondary/20 focus-visible:ring-brand-secondary text-black"
             value={location}
             onChange={(e) => setLocation(e.target.value)}
           />

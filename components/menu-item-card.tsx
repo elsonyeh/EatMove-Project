@@ -2,16 +2,19 @@
 
 import Image from "next/image"
 import { Button } from "@/components/ui/button"
+import { getMenuItemImage } from "@/utils/image-utils"
+
+interface MenuItem {
+  id: string
+  name: string
+  description: string
+  price: number
+  category: string
+  image: string
+}
 
 interface MenuItemCardProps {
-  item: {
-    id: string
-    name: string
-    description: string
-    price: number
-    category: string
-    image: string
-  }
+  item: MenuItem
   cuisine: string
   index: number
   onAddToCart: (id: string) => void
@@ -22,10 +25,12 @@ export function MenuItemCard({ item, cuisine, index, onAddToCart }: MenuItemCard
     <div className="flex items-center gap-4 p-4 border rounded-lg">
       <div className="w-24 h-24 relative rounded-md overflow-hidden bg-gray-100 shrink-0">
         <Image
-          src={`/placeholder.svg?height=96&width=96&text=${encodeURIComponent(item.name)}`}
+          src={getMenuItemImage(item.name) || "/placeholder.svg"}
           alt={item.name}
           fill
           className="object-cover"
+          loading={index < 2 ? "eager" : "lazy"}
+          sizes="96px"
         />
       </div>
       <div className="flex-1 min-w-0">

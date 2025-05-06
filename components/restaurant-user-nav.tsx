@@ -14,10 +14,12 @@ import {
 import { useToast } from "@/components/ui/use-toast"
 import { useRestaurantAuth } from "@/components/restaurant-auth-provider"
 import { Store, Settings, LogOut } from "lucide-react"
+import { useRouter } from "next/navigation"
 
 export function RestaurantUserNav() {
   const { account, logout } = useRestaurantAuth()
   const { toast } = useToast()
+  const router = useRouter()
 
   const handleLogout = () => {
     toast({
@@ -51,11 +53,11 @@ export function RestaurantUserNav() {
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
         <DropdownMenuGroup>
-          <DropdownMenuItem>
+          <DropdownMenuItem onClick={() => router.push("/restaurant/settings")}>
             <Store className="mr-2 h-4 w-4 text-brand-primary" />
             <span>店家資訊</span>
           </DropdownMenuItem>
-          <DropdownMenuItem>
+          <DropdownMenuItem onClick={() => router.push("/restaurant/settings")}>
             <Settings className="mr-2 h-4 w-4 text-brand-dark" />
             <span>帳號設定</span>
           </DropdownMenuItem>

@@ -1,6 +1,4 @@
 "use client"
-
-import { useState } from "react"
 import Image from "next/image"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
@@ -9,34 +7,15 @@ import { Input } from "@/components/ui/input"
 import { Separator } from "@/components/ui/separator"
 import { Trash2, Plus, Minus } from "lucide-react"
 import { useToast } from "@/components/ui/use-toast"
-import { cartItems } from "@/lib/data"
+import { useCart } from "@/hooks/use-cart"
 
 export default function UserCartPage() {
   const router = useRouter()
   const { toast } = useToast()
-  const [items, setItems] = useState(cartItems)
-
-  const updateQuantity = (id: string, newQuantity: number) => {
-    if (newQuantity < 1) return
-
-    setItems(items.map((item) => (item.id === id ? { ...item, quantity: newQuantity } : item)))
-  }
-
-  const removeItem = (id: string) => {
-    setItems(items.filter((item) => item.id !== id))
-
-    toast({
-      title: "已移除商品",
-      description: "商品已從購物車中移除",
-    })
-  }
-
-  const subtotal = items.reduce((sum, item) => sum + item.price * item.quantity, 0)
-  const deliveryFee = 60
-  const total = subtotal + deliveryFee
+  const { cart, updateQuantity, removeItem, clearCart, getSubtotal, mounted } = useCart()
 
   const handleCheckout = () => {
-    if (items.length === 0) {
+    if (cart.items.length === 0) {
       toast({
         title: "購物車為空",
         description: "請先添加商品到購物車",
@@ -48,22 +27,59 @@ export default function UserCartPage() {
     router.push("/user/checkout")
   }
 
+  const handleClearCart = () => {
+    if (cart.items.length === 0) return
+
+    clearCart()
+    toast({
+      title: "購物車已清空",
+      description: "所有商品已從購物車中移除",
+    })
+  }
+
+  // Wait for client-side hydration
+  if (!mounted) {
+    return (
+      <div className="container py-6">
+        <div className="mb-8">
+          <h1 className="text-3xl font-bold tracking-tight mb-2">購物車</h1>
+          <p className="text-muted-foreground">載入中...</p>
+        </div>
+      </div>
+    )
+  }
+
+  const subtotal = getSubtotal()
+  const deliveryFee = 60
+  const total = subtotal + deliveryFee
+
   return (
     <div className="container py-6">
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold tracking-tight mb-2">購物車</h1>
-        <p className="text-muted-foreground">查看並編輯您的購物車商品</p>
+      <div className="mb-8 flex justify-between items-center">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight mb-2">購物車</h1>
+          <p className="text-muted-foreground">查看並編輯您的購物車商品</p>
+        </div>
+        {cart.items.length > 0 && (
+          <Button
+            variant="outline"
+            onClick={handleClearCart}
+            className="text-red-500 border-red-200 hover:bg-red-50 hover:text-red-600"
+          >
+            清空購物車
+          </Button>
+        )}
       </div>
 
-      {items.length > 0 ? (
+      {cart.items.length > 0 ? (
         <div className="grid gap-8 md:grid-cols-3">
           <div className="md:col-span-2">
             <Card>
               <CardHeader>
-                <CardTitle>購物車商品 ({items.length})</CardTitle>
+                <CardTitle>購物車商品 ({cart.items.length})</CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
-                {items.map((item) => (
+                {cart.items.map((item) => (
                   <div key={item.id} className="flex items-center space-x-4">
                     <div className="relative h-16 w-16 overflow-hidden rounded-md">
                       <Image
@@ -75,7 +91,7 @@ export default function UserCartPage() {
                     </div>
                     <div className="flex-1 space-y-1">
                       <h3 className="font-medium">{item.name}</h3>
-                      <p className="text-sm text-muted-foreground">{item.restaurant}</p>
+                      <p className="text-sm text-muted-foreground">{item.restaurantName}</p>
                     </div>
                     <div className="flex items-center space-x-2">
                       <Button
@@ -146,7 +162,9 @@ export default function UserCartPage() {
         <div className="text-center py-12">
           <h2 className="text-xl font-medium mb-2">您的購物車是空的</h2>
           <p className="text-muted-foreground mb-4">瀏覽店家並添加商品到購物車</p>
-          <Button onClick={() => router.push("/user/home")}>瀏覽店家</Button>
+          <Button onClick={() => router.push("/user/home")} className="bg-brand-primary hover:bg-brand-primary/90">
+            瀏覽店家
+          </Button>
         </div>
       )}
     </div>
