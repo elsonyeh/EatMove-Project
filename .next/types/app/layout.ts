@@ -1,4 +1,4 @@
-// File: C:\Users\elson\OneDrive\桌面\大學\大三下\資料庫管理\EatMove\app\layout.tsx
+// File: /Users/rayneli/EatMove-Project/app/layout.tsx
 import * as entry from '../../../app/layout.js'
 import type { ResolvingMetadata, ResolvingViewport } from 'next/dist/lib/metadata/types/metadata-interface.js'
 

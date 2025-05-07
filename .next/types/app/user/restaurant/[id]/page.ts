@@ -1,4 +1,4 @@
-// File: C:\Users\elson\OneDrive\桌面\大學\大三下\資料庫管理\EatMove\app\user\restaurant\[id]\page.tsx
+// File: /Users/rayneli/EatMove-Project/app/user/restaurant/[id]/page.tsx
 import * as entry from '../../../../../../app/user/restaurant/[id]/page.js'
 import type { ResolvingMetadata, ResolvingViewport } from 'next/dist/lib/metadata/types/metadata-interface.js'
 

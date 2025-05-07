@@ -2,7 +2,7 @@
 
 import type React from "react"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
@@ -19,6 +19,25 @@ export default function UserCheckoutPage() {
   const { toast } = useToast()
   const [paymentMethod, setPaymentMethod] = useState("cash")
   const { cart, getSubtotal, clearCart, mounted } = useCart()
+
+  // 導回購物車頁面（避免 render 時直接 push）
+  useEffect(() => {
+    if (mounted && cart.items.length === 0) {
+      router.push("/user/cart")
+    }
+  }, [mounted, cart.items, router])
+
+  if (!mounted || cart.items.length === 0) {
+    return (
+      <div className="container py-6">
+        <div className="mb-8">
+          <h1 className="text-3xl font-bold tracking-tight mb-2">結帳</h1>
+          <p className="text-muted-foreground">載入中...</p>
+        </div>
+      </div>
+    )
+  }
+
 
   // 計算訂單金額
   const subtotal = getSubtotal()
@@ -46,24 +65,6 @@ export default function UserCheckoutPage() {
     setTimeout(() => {
       clearCart()
     }, 500)
-  }
-
-  // 等待客戶端渲染
-  if (!mounted) {
-    return (
-      <div className="container py-6">
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold tracking-tight mb-2">結帳</h1>
-          <p className="text-muted-foreground">載入中...</p>
-        </div>
-      </div>
-    )
-  }
-
-  // 如果購物車為空，導回購物車頁面
-  if (cart.items.length === 0) {
-    router.push("/user/cart")
-    return null
   }
 
   return (
