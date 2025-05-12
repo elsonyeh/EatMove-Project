@@ -103,38 +103,66 @@ export default function RestaurantProductsPage() {
     setShowEditDialog(true)
   }
 
-  const handleAddProduct = (e: React.FormEvent) => {
-    e.preventDefault()
-
+  const handleAddProduct = async (e: React.FormEvent) => {
+    e.preventDefault();
+  
     if (!formData.name || !formData.price) {
       toast({
         title: "錯誤",
         description: "請填寫商品名稱和價格",
         variant: "destructive",
-      })
-      return
+      });
+      return;
     }
-
+  
     const newProduct = {
-      id: `product-${Date.now()}`,
+      rid: account?.restaurantId,
       name: formData.name,
       description: formData.description,
       price: Number.parseFloat(formData.price),
       category: formData.category,
       image: formData.image || "/placeholder.svg?height=128&width=128",
-      isAvailable: formData.isAvailable,
-      restaurantId: account?.restaurantId,
+      isavailable: true,
+      ispopular: true,
+      dishid: Math.floor(Date.now() / 1000)
+    };
+  
+    try {
+      const res = await fetch("/api/products", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(newProduct),
+      });
+  
+      const data = await res.json();
+  
+      if (data.success) {
+        setProducts([data.item, ...products]);
+        setShowAddDialog(false);
+  
+        toast({
+          title: "✅ 商品已新增",
+          description: "已成功寫入資料庫",
+        });
+      } else {
+        toast({
+          title: "❌ 新增失敗",
+          description: data.message || "後端回傳錯誤",
+          variant: "destructive",
+        });
+      }
+    } catch (error) {
+      console.error("新增商品時發生錯誤：", error);
+      toast({
+        title: "伺服器錯誤",
+        description: "無法新增商品，請稍後再試。",
+        variant: "destructive",
+      });
     }
-
-    setProducts([newProduct, ...products])
-    setShowAddDialog(false)
-
-    toast({
-      title: "商品已新增",
-      description: "商品已成功新增到菜單",
-    })
-  }
-
+  };
+  
   const handleEditProduct = (e: React.FormEvent) => {
     e.preventDefault()
 
