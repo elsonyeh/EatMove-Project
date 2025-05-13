@@ -1,7 +1,6 @@
 "use client"
 
 import type React from "react"
-
 import { useState } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
@@ -9,7 +8,14 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle
+} from "@/components/ui/card"
 import { useToast } from "@/components/ui/use-toast"
 import { BrandLogo } from "@/components/brand-logo"
 
@@ -22,8 +28,8 @@ export default function RegisterPage() {
   const [password, setPassword] = useState("")
   const [confirmPassword, setConfirmPassword] = useState("")
 
-  const handleRegister = (e: React.FormEvent) => {
-    e.preventDefault()
+  const handleRegister = async () => {
+    console.log("⚡ 點擊註冊")
 
     if (!username || !email || !password || !confirmPassword) {
       toast({
@@ -43,13 +49,43 @@ export default function RegisterPage() {
       return
     }
 
-    // 模擬註冊成功
-    toast({
-      title: "註冊成功",
-      description: "請登入您的帳號",
-    })
+    const payload = {
+      mid: username,
+      name: username,
+      address: "暫時地址",
+      phonenumber: "0912345678",
+      email,
+      introducer: null,
+    }
 
-    router.push("/login")
+    try {
+      const res = await fetch("/api/member", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(payload),
+      })
+
+      const data = await res.json()
+
+      if (!res.ok || !data.success) {
+        throw new Error(data.message || "註冊失敗")
+      }
+
+      toast({
+        title: "註冊成功",
+        description: "請登入您的帳號",
+      })
+
+      router.push("/login")
+    } catch (err: any) {
+      toast({
+        title: "註冊失敗",
+        description: err.message,
+        variant: "destructive",
+      })
+    }
   }
 
   return (
@@ -73,18 +109,22 @@ export default function RegisterPage() {
           <Card className="mt-4 border-none shadow-lg">
             <CardHeader>
               <CardTitle>
-                {userType === "user" ? "用戶註冊" : userType === "restaurant" ? "店家註冊" : "外送員註冊"}
+                {userType === "user"
+                  ? "用戶註冊"
+                  : userType === "restaurant"
+                  ? "店家註冊"
+                  : "外送員註冊"}
               </CardTitle>
               <CardDescription>
                 {userType === "user"
                   ? "創建您的用戶帳號以開始訂購美食"
                   : userType === "restaurant"
-                    ? "創建您的店家帳號以開始銷售美食"
-                    : "創建您的外送員帳號以開始接單"}
+                  ? "創建您的店家帳號以開始銷售美食"
+                  : "創建您的外送員帳號以開始接單"}
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <form onSubmit={handleRegister} className="space-y-4">
+              <form className="space-y-4">
                 <div className="space-y-2">
                   <Label htmlFor="username">用戶名稱</Label>
                   <Input
@@ -124,19 +164,7 @@ export default function RegisterPage() {
                     onChange={(e) => setConfirmPassword(e.target.value)}
                   />
                 </div>
-                {userType === "restaurant" && (
-                  <div className="space-y-2">
-                    <Label htmlFor="restaurantName">店家名稱</Label>
-                    <Input id="restaurantName" placeholder="請輸入店家名稱" />
-                  </div>
-                )}
-                {userType === "delivery" && (
-                  <div className="space-y-2">
-                    <Label htmlFor="vehicleType">交通工具</Label>
-                    <Input id="vehicleType" placeholder="請輸入交通工具類型" />
-                  </div>
-                )}
-                <Button type="submit" className="w-full">
+                <Button type="button" onClick={handleRegister} className="w-full">
                   註冊
                 </Button>
               </form>

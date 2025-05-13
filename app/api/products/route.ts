@@ -18,3 +18,36 @@ export async function POST(req: Request) {
     return NextResponse.json({ success: false, message: '資料庫寫入失敗' }, { status: 500 })
   }
 }
+// 🗑️ 刪除商品：DELETE
+export async function DELETE(req: Request) {
+  const { dishid } = await req.json()
+
+  if (!dishid) {
+    return NextResponse.json(
+      { success: false, message: '缺少 dishid' },
+      { status: 400 }
+    )
+  }
+
+  try {
+    const result = await pool.query(
+      'DELETE FROM menu WHERE dishid = $1 RETURNING *',
+      [dishid]
+    )
+
+    if (result.rowCount === 0) {
+      return NextResponse.json(
+        { success: false, message: '找不到對應商品' },
+        { status: 404 }
+      )
+    }
+
+    return NextResponse.json({ success: true, deleted: result.rows[0] })
+  } catch (err) {
+    console.error('❌ 刪除商品失敗：', err)
+    return NextResponse.json(
+      { success: false, message: '資料庫操作失敗' },
+      { status: 500 }
+    )
+  }
+}
