@@ -23,7 +23,8 @@ export default function RegisterPage() {
   const router = useRouter()
   const { toast } = useToast()
   const [userType, setUserType] = useState("user")
-  const [username, setUsername] = useState("")
+  const [account, setAccount] = useState("") // 新增：店家帳號
+  const [username, setUsername] = useState("") // 店家名稱
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
   const [confirmPassword, setConfirmPassword] = useState("")
@@ -31,7 +32,7 @@ export default function RegisterPage() {
   const handleRegister = async () => {
     console.log("⚡ 點擊註冊")
 
-    if (!username || !email || !password || !confirmPassword) {
+    if (!username || !email || !password || !confirmPassword || (userType === "restaurant" && !account)) {
       toast({
         title: "註冊失敗",
         description: "請填寫所有欄位",
@@ -50,12 +51,19 @@ export default function RegisterPage() {
     }
 
     const payload = {
-      mid: username,
+      role:
+        userType === "user"
+          ? "member"
+          : userType === "restaurant"
+          ? "restaurant"
+          : "deliveryman",
+      account: userType === "restaurant" ? account : undefined, // 只對店家傳帳號
       name: username,
-      address: "暫時地址",
-      phonenumber: "0912345678",
       email,
-      introducer: null,
+      password,
+      phonenumber: "0912345678",
+      address: "暫時地址",
+      description: "暫時描述",
     }
 
     try {
@@ -125,11 +133,28 @@ export default function RegisterPage() {
             </CardHeader>
             <CardContent>
               <form className="space-y-4">
+                {userType === "restaurant" && (
+                  <div className="space-y-2">
+                    <Label htmlFor="account">店家帳號</Label>
+                    <Input
+                      id="account"
+                      placeholder="請輸入店家帳號"
+                      value={account}
+                      onChange={(e) => setAccount(e.target.value)}
+                    />
+                  </div>
+                )}
                 <div className="space-y-2">
-                  <Label htmlFor="username">用戶名稱</Label>
+                  <Label htmlFor="username">
+                    {userType === "restaurant" ? "店家名稱" : "用戶名稱"}
+                  </Label>
                   <Input
                     id="username"
-                    placeholder="請輸入用戶名稱"
+                    placeholder={
+                      userType === "restaurant"
+                        ? "請輸入店家名稱"
+                        : "請輸入用戶名稱"
+                    }
                     value={username}
                     onChange={(e) => setUsername(e.target.value)}
                   />

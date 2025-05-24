@@ -1,14 +1,19 @@
 "use client"
 
-import type React from "react"
-
 import { useState, useEffect } from "react"
 import Image from "next/image"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import {
   Dialog,
   DialogContent,
@@ -18,64 +23,64 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { Textarea } from "@/components/ui/textarea"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Switch } from "@/components/ui/switch"
 import { Badge } from "@/components/ui/badge"
 import { Pencil, Plus, Trash2 } from "lucide-react"
 import { useToast } from "@/components/ui/use-toast"
-import { menuItems } from "@/lib/data"
 import { useRestaurantAuth } from "@/components/restaurant-auth-provider"
 import { Skeleton } from "@/components/ui/skeleton"
 
 export default function RestaurantProductsPage() {
   const { toast } = useToast()
   const { account } = useRestaurantAuth()
+
   const [products, setProducts] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
+  const [tab, setTab] = useState<"all" | "主餐" | "配菜" | "飲料">("all")
+
   const [showAddDialog, setShowAddDialog] = useState(false)
   const [showEditDialog, setShowEditDialog] = useState(false)
   const [currentProduct, setCurrentProduct] = useState<any>(null)
+
   const [formData, setFormData] = useState({
     name: "",
     description: "",
     price: "",
-    category: "",
+    category: "主餐",
     image: "",
     isAvailable: true,
   })
 
   useEffect(() => {
-    if (account) {
-      // 模擬加載數據
-      setTimeout(() => {
-        // 根據餐廳ID過濾菜單項目
-        const filteredProducts = menuItems.filter((item) => item.restaurantId === account.restaurantId)
-        setProducts(filteredProducts)
+    async function fetchProducts() {
+      if (!account?.restaurantId) {
+        console.error("❌ 無法取得餐廳帳號資訊")
         setLoading(false)
-      }, 800)
+        return
+      }
+      try {
+        const res = await fetch(`/api/products?rid=${account.restaurantId}`)
+        if (!res.ok) throw new Error(`伺服器錯誤 (${res.status})`)
+        const data = await res.json()
+        const items = (data.items || []).map((p: any) => ({
+          ...p,
+          price: typeof p.price === "string" ? parseFloat(p.price) : p.price,
+          dishid: typeof p.dishid === "string" ? parseInt(p.dishid, 10) : p.dishid,
+        }))
+        setProducts(items)
+      } catch (err) {
+        console.error("❌ 載入商品失敗：", err)
+        toast({ title: "載入失敗", variant: "destructive" })
+      } finally {
+        setLoading(false)
+      }
     }
-  }, [account])
+    fetchProducts()
+  }, [account, toast])
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target
-    setFormData({
-      ...formData,
-      [name]: value,
-    })
-  }
-
-  const handleSwitchChange = (checked: boolean) => {
-    setFormData({
-      ...formData,
-      isAvailable: checked,
-    })
-  }
-
-  const handleSelectChange = (value: string) => {
-    setFormData({
-      ...formData,
-      category: value,
-    })
+    setFormData(prev => ({ ...prev, [name]: value }))
   }
 
   const openAddDialog = () => {
@@ -83,7 +88,7 @@ export default function RestaurantProductsPage() {
       name: "",
       description: "",
       price: "",
-      category: "",
+      category: "主餐",
       image: "",
       isAvailable: true,
     })
@@ -96,511 +101,229 @@ export default function RestaurantProductsPage() {
       name: product.name,
       description: product.description,
       price: product.price.toString(),
-      category: product.category || "",
-      image: product.image || "",
-      isAvailable: product.isAvailable !== false,
+      category: product.category,
+      image: product.image,
+      isAvailable: product.isavailable,
     })
     setShowEditDialog(true)
   }
 
   const handleAddProduct = async (e: React.FormEvent) => {
-    e.preventDefault();
-  
+    e.preventDefault()
     if (!formData.name || !formData.price) {
-      toast({
-        title: "錯誤",
-        description: "請填寫商品名稱和價格",
-        variant: "destructive",
-      });
-      return;
+      toast({ title: "錯誤", description: "請填寫商品名稱和價格", variant: "destructive" })
+      return
     }
-  
     const newProduct = {
-      rid: account?.restaurantId,
+      rid: account!.restaurantId,
+      dishid: Math.floor(Date.now() / 1000),
       name: formData.name,
       description: formData.description,
-      price: Number.parseFloat(formData.price),
+      price: parseFloat(formData.price),
       category: formData.category,
       image: formData.image || "/placeholder.svg?height=128&width=128",
-      isavailable: true,
+      isavailable: formData.isAvailable,
       ispopular: true,
-      dishid: Math.floor(Date.now() / 1000)
-    };
-  
+    }
     try {
       const res = await fetch("/api/products", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(newProduct),
-      });
-  
-      const data = await res.json();
-  
-      if (data.success) {
-        setProducts([data.item, ...products]);
-        setShowAddDialog(false);
-  
-        toast({
-          title: "✅ 商品已新增",
-          description: "已成功寫入資料庫",
-        });
-      } else {
-        toast({
-          title: "❌ 新增失敗",
-          description: data.message || "後端回傳錯誤",
-          variant: "destructive",
-        });
-      }
-    } catch (error) {
-      console.error("新增商品時發生錯誤：", error);
-      toast({
-        title: "伺服器錯誤",
-        description: "無法新增商品，請稍後再試。",
-        variant: "destructive",
-      });
-    }
-  };
-  
-  const handleEditProduct = (e: React.FormEvent) => {
-    e.preventDefault()
-
-    if (!formData.name || !formData.price) {
-      toast({
-        title: "錯誤",
-        description: "請填寫商品名稱和價格",
-        variant: "destructive",
       })
-      return
+      const data = await res.json()
+      if (data.success) {
+        setProducts(prev => [data.item, ...prev])
+        setShowAddDialog(false)
+        toast({ title: "✅ 商品已新增" })
+      } else {
+        toast({ title: "❌ 新增失敗", description: data.message, variant: "destructive" })
+      }
+    } catch (err) {
+      console.error("❌ 新增商品失敗：", err)
+      toast({ title: "伺服器錯誤", variant: "destructive" })
     }
-
-    const updatedProducts = products.map((product) =>
-      product.id === currentProduct.id
-        ? {
-            ...product,
-            name: formData.name,
-            description: formData.description,
-            price: Number.parseFloat(formData.price),
-            category: formData.category,
-            image: formData.image || product.image,
-            isAvailable: formData.isAvailable,
-          }
-        : product,
-    )
-
-    setProducts(updatedProducts)
-    setShowEditDialog(false)
-
-    toast({
-      title: "商品已更新",
-      description: "商品資訊已成功更新",
-    })
   }
 
-  const handleDeleteProduct = (id: string) => {
-    setProducts(products.filter((product) => product.id !== id))
-
-    toast({
-      title: "商品已刪除",
-      description: "商品已從菜單中移除",
-    })
+  const handleEditProduct = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!currentProduct) return
+    const updated = {
+      rid: account!.restaurantId,
+      dishid: currentProduct.dishid,
+      name: formData.name,
+      description: formData.description,
+      price: parseFloat(formData.price),
+      category: formData.category,
+      image: formData.image,
+      isavailable: formData.isAvailable,
+    }
+    try {
+      const res = await fetch("/api/products", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(updated),
+      })
+      const data = await res.json()
+      if (data.success) {
+        setProducts(prev => prev.map(p => p.dishid === updated.dishid ? data.item : p))
+        setShowEditDialog(false)
+        toast({ title: "✅ 商品已更新" })
+      } else {
+        toast({ title: "❌ 更新失敗", description: data.message, variant: "destructive" })
+      }
+    } catch (err) {
+      console.error("❌ 更新商品失敗：", err)
+      toast({ title: "伺服器錯誤", variant: "destructive" })
+    }
   }
+
+  const handleDeleteProduct = async (dishid: number) => {
+    if (!window.confirm("確定要刪除這個商品嗎？")) return
+    try {
+      const res = await fetch("/api/products", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ rid: account!.restaurantId, dishid }),
+      })
+      const data = await res.json()
+      if (data.success) {
+        setProducts(prev => prev.filter(p => Number(p.dishid) !== Number(dishid)))
+        toast({ title: "✅ 商品已刪除" })
+      } else {
+        toast({ title: "❌ 刪除失敗", description: data.message, variant: "destructive" })
+      }
+    } catch (err) {
+      console.error("❌ 刪除商品失敗：", err)
+      toast({ title: "伺服器錯誤", variant: "destructive" })
+    }
+  }
+
+  const filtered = products.filter(p => tab === "all" || p.category === tab)
 
   return (
     <div className="container py-6">
-      <div className="flex items-center justify-between mb-8">
+      <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight mb-2">商品管理</h1>
+          <h1 className="text-3xl font-bold mb-1">商品管理</h1>
           <p className="text-muted-foreground">管理您的菜單和商品</p>
         </div>
         <Button onClick={openAddDialog} className="bg-brand-primary hover:bg-brand-primary/90">
-          <Plus className="mr-2 h-4 w-4" />
-          新增商品
+          <Plus className="mr-2 h-4 w-4" /> 新增商品
         </Button>
       </div>
 
-      <Tabs defaultValue="all">
-        <TabsList className="grid w-full grid-cols-4">
+      <Tabs value={tab} onValueChange={setTab} className="mb-4">
+        <TabsList>
           <TabsTrigger value="all">全部商品</TabsTrigger>
-          <TabsTrigger value="main">主餐</TabsTrigger>
-          <TabsTrigger value="side">配菜</TabsTrigger>
-          <TabsTrigger value="drink">飲料</TabsTrigger>
+          <TabsTrigger value="主餐">主餐</TabsTrigger>
+          <TabsTrigger value="配菜">配菜</TabsTrigger>
+          <TabsTrigger value="飲料">飲料</TabsTrigger>
         </TabsList>
-
-        <TabsContent value="all" className="mt-6">
-          {loading ? (
-            <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-              {[1, 2, 3, 4, 5, 6].map((i) => (
-                <Card key={i}>
-                  <Skeleton className="h-48 w-full rounded-t-lg" />
-                  <CardHeader>
-                    <Skeleton className="h-5 w-3/4 mb-2" />
-                    <Skeleton className="h-4 w-full" />
-                  </CardHeader>
-                  <CardContent>
-                    <div className="flex items-center justify-between">
-                      <Skeleton className="h-6 w-16" />
-                      <Skeleton className="h-4 w-24" />
-                    </div>
-                  </CardContent>
-                  <CardFooter className="flex justify-between">
-                    <Skeleton className="h-9 w-20" />
-                    <Skeleton className="h-9 w-20" />
-                  </CardFooter>
-                </Card>
-              ))}
-            </div>
-          ) : products.length > 0 ? (
-            <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-              {products.map((product) => (
-                <Card key={product.id} className="overflow-hidden border-none shadow-md">
-                  <div className="relative h-48 w-full">
-                    <Image
-                      src={
-                        product.image ||
-                        `/placeholder.svg?height=192&width=384&text=${encodeURIComponent(product.name)}`
-                      }
-                      alt={product.name}
-                      fill
-                      className="object-cover rounded-t-lg"
-                    />
-                    {product.isAvailable === false && (
-                      <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
-                        <Badge variant="destructive" className="text-lg">
-                          已下架
-                        </Badge>
-                      </div>
-                    )}
-                  </div>
-                  <CardHeader>
-                    <CardTitle>{product.name}</CardTitle>
-                    <CardDescription className="line-clamp-2">{product.description}</CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="flex items-center justify-between">
-                      <span className="font-bold text-lg">${product.price}</span>
-                      <Badge variant="outline">{product.category || "未分類"}</Badge>
-                    </div>
-                  </CardContent>
-                  <CardFooter className="flex justify-between">
-                    <Button variant="outline" size="sm" onClick={() => openEditDialog(product)}>
-                      <Pencil className="mr-2 h-4 w-4" />
-                      編輯
-                    </Button>
-                    <Button variant="destructive" size="sm" onClick={() => handleDeleteProduct(product.id)}>
-                      <Trash2 className="mr-2 h-4 w-4" />
-                      刪除
-                    </Button>
-                  </CardFooter>
-                </Card>
-              ))}
-            </div>
-          ) : (
-            <div className="text-center py-12 bg-muted/30 rounded-xl">
-              <h2 className="text-xl font-medium mb-2">尚無商品</h2>
-              <p className="text-muted-foreground mb-4">點擊「新增商品」按鈕來添加您的第一個商品</p>
-              <Button onClick={openAddDialog}>
-                <Plus className="mr-2 h-4 w-4" />
-                新增商品
-              </Button>
-            </div>
-          )}
-        </TabsContent>
-
-        <TabsContent value="main" className="mt-6">
-          <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-            {products
-              .filter((product) => product.category === "主餐")
-              .map((product) => (
-                <Card key={product.id} className="overflow-hidden border-none shadow-md">
-                  <div className="relative h-48 w-full">
-                    <Image
-                      src={
-                        product.image ||
-                        `/placeholder.svg?height=192&width=384&text=${encodeURIComponent(product.name)}`
-                      }
-                      alt={product.name}
-                      fill
-                      className="object-cover rounded-t-lg"
-                    />
-                    {product.isAvailable === false && (
-                      <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
-                        <Badge variant="destructive" className="text-lg">
-                          已下架
-                        </Badge>
-                      </div>
-                    )}
-                  </div>
-                  <CardHeader>
-                    <CardTitle>{product.name}</CardTitle>
-                    <CardDescription className="line-clamp-2">{product.description}</CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="flex items-center justify-between">
-                      <span className="font-bold text-lg">${product.price}</span>
-                      <Badge variant="outline">{product.category || "未分類"}</Badge>
-                    </div>
-                  </CardContent>
-                  <CardFooter className="flex justify-between">
-                    <Button variant="outline" size="sm" onClick={() => openEditDialog(product)}>
-                      <Pencil className="mr-2 h-4 w-4" />
-                      編輯
-                    </Button>
-                    <Button variant="destructive" size="sm" onClick={() => handleDeleteProduct(product.id)}>
-                      <Trash2 className="mr-2 h-4 w-4" />
-                      刪除
-                    </Button>
-                  </CardFooter>
-                </Card>
-              ))}
-          </div>
-        </TabsContent>
-
-        <TabsContent value="side" className="mt-6">
-          <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-            {products
-              .filter((product) => product.category === "配菜" || product.category === "小菜")
-              .map((product) => (
-                <Card key={product.id} className="overflow-hidden border-none shadow-md">
-                  <div className="relative h-48 w-full">
-                    <Image
-                      src={
-                        product.image ||
-                        `/placeholder.svg?height=192&width=384&text=${encodeURIComponent(product.name)}`
-                      }
-                      alt={product.name}
-                      fill
-                      className="object-cover rounded-t-lg"
-                    />
-                    {product.isAvailable === false && (
-                      <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
-                        <Badge variant="destructive" className="text-lg">
-                          已下架
-                        </Badge>
-                      </div>
-                    )}
-                  </div>
-                  <CardHeader>
-                    <CardTitle>{product.name}</CardTitle>
-                    <CardDescription className="line-clamp-2">{product.description}</CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="flex items-center justify-between">
-                      <span className="font-bold text-lg">${product.price}</span>
-                      <Badge variant="outline">{product.category || "未分類"}</Badge>
-                    </div>
-                  </CardContent>
-                  <CardFooter className="flex justify-between">
-                    <Button variant="outline" size="sm" onClick={() => openEditDialog(product)}>
-                      <Pencil className="mr-2 h-4 w-4" />
-                      編輯
-                    </Button>
-                    <Button variant="destructive" size="sm" onClick={() => handleDeleteProduct(product.id)}>
-                      <Trash2 className="mr-2 h-4 w-4" />
-                      刪除
-                    </Button>
-                  </CardFooter>
-                </Card>
-              ))}
-          </div>
-        </TabsContent>
-
-        <TabsContent value="drink" className="mt-6">
-          <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-            {products
-              .filter((product) => product.category === "飲料")
-              .map((product) => (
-                <Card key={product.id} className="overflow-hidden border-none shadow-md">
-                  <div className="relative h-48 w-full">
-                    <Image
-                      src={
-                        product.image ||
-                        `/placeholder.svg?height=192&width=384&text=${encodeURIComponent(product.name)}`
-                      }
-                      alt={product.name}
-                      fill
-                      className="object-cover rounded-t-lg"
-                    />
-                    {product.isAvailable === false && (
-                      <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
-                        <Badge variant="destructive" className="text-lg">
-                          已下架
-                        </Badge>
-                      </div>
-                    )}
-                  </div>
-                  <CardHeader>
-                    <CardTitle>{product.name}</CardTitle>
-                    <CardDescription className="line-clamp-2">{product.description}</CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="flex items-center justify-between">
-                      <span className="font-bold text-lg">${product.price}</span>
-                      <Badge variant="outline">{product.category || "未分類"}</Badge>
-                    </div>
-                  </CardContent>
-                  <CardFooter className="flex justify-between">
-                    <Button variant="outline" size="sm" onClick={() => openEditDialog(product)}>
-                      <Pencil className="mr-2 h-4 w-4" />
-                      編輯
-                    </Button>
-                    <Button variant="destructive" size="sm" onClick={() => handleDeleteProduct(product.id)}>
-                      <Trash2 className="mr-2 h-4 w-4" />
-                      刪除
-                    </Button>
-                  </CardFooter>
-                </Card>
-              ))}
-          </div>
-        </TabsContent>
       </Tabs>
 
+      {loading ? (
+        <Skeleton className="w-full h-40" />
+      ) : filtered.length === 0 ? (
+        <p className="text-center text-muted-foreground">目前沒有商品</p>
+      ) : (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+          {filtered.map(product => (
+            <Card key={product.dishid}>
+              <CardHeader>
+                <CardTitle>{product.name}</CardTitle>
+                <CardDescription>{product.description}</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <Image
+                  src={product.image}
+                  alt={product.name}
+                  width={128}
+                  height={128}
+                  className="rounded-md mb-4"
+                />
+                <p className="font-semibold mb-2">
+                  價格：${Number(product.price).toFixed(2)}
+                </p>
+                <Badge variant={product.isavailable ? "outline" : "destructive"}>
+                  {product.isavailable ? "可供應" : "暫停供應"}
+                </Badge>
+                <Badge className="ml-2" variant="secondary">
+                  {product.category}
+                </Badge>
+              </CardContent>
+              <CardFooter className="flex justify-between">
+                <Button variant="outline" onClick={() => openEditDialog(product)}>
+                  <Pencil className="mr-2 h-4 w-4" /> 編輯
+                </Button>
+                <Button variant="destructive" onClick={() => handleDeleteProduct(product.dishid)}>
+                  <Trash2 className="mr-2 h-4 w-4" /> 刪除
+                </Button>
+              </CardFooter>
+            </Card>
+          ))}
+        </div>
+      )}
+
+      {/* 新增商品 Dialog */}
       <Dialog open={showAddDialog} onOpenChange={setShowAddDialog}>
-        <DialogContent className="sm:max-w-[500px]">
+        <DialogContent>
           <DialogHeader>
             <DialogTitle>新增商品</DialogTitle>
-            <DialogDescription>填寫以下資訊以新增商品到您的菜單</DialogDescription>
+            <DialogDescription>填寫以下欄位以新增商品</DialogDescription>
           </DialogHeader>
-          <form onSubmit={handleAddProduct}>
-            <div className="grid gap-4 py-4">
-              <div className="grid gap-2">
-                <Label htmlFor="name">商品名稱</Label>
-                <Input
-                  id="name"
-                  name="name"
-                  placeholder="請輸入商品名稱"
-                  value={formData.name}
-                  onChange={handleInputChange}
-                />
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="description">商品描述</Label>
-                <Textarea
-                  id="description"
-                  name="description"
-                  placeholder="請輸入商品描述"
-                  value={formData.description}
-                  onChange={handleInputChange}
-                />
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="price">價格</Label>
-                <Input
-                  id="price"
-                  name="price"
-                  type="number"
-                  placeholder="請輸入價格"
-                  value={formData.price}
-                  onChange={handleInputChange}
-                />
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="category">分類</Label>
-                <Select value={formData.category} onValueChange={handleSelectChange}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="選擇分類" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="主餐">主餐</SelectItem>
-                    <SelectItem value="配菜">配菜</SelectItem>
-                    <SelectItem value="飲料">飲料</SelectItem>
-                    <SelectItem value="甜點">甜點</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="image">圖片網址</Label>
-                <Input
-                  id="image"
-                  name="image"
-                  placeholder="請輸入圖片網址"
-                  value={formData.image}
-                  onChange={handleInputChange}
-                />
-              </div>
-              <div className="flex items-center space-x-2">
-                <Switch id="isAvailable" checked={formData.isAvailable} onCheckedChange={handleSwitchChange} />
-                <Label htmlFor="isAvailable">上架商品</Label>
-              </div>
+          <form onSubmit={handleAddProduct} className="space-y-4">
+            <Label>名稱</Label>
+            <Input name="name" value={formData.name} onChange={handleInputChange} required />
+            <Label>描述</Label>
+            <Textarea name="description" value={formData.description} onChange={handleInputChange} />
+            <Label>價格</Label>
+            <Input name="price" type="number" value={formData.price} onChange={handleInputChange} required />
+            <Label>類別</Label>
+            <Input name="category" value={formData.category} onChange={handleInputChange} />
+            <Label>圖片 URL</Label>
+            <Input name="image" value={formData.image} onChange={handleInputChange} />
+            <div className="flex items-center space-x-2">
+              <Label>是否供應</Label>
+              <Switch
+                checked={formData.isAvailable}
+                onCheckedChange={checked => setFormData(prev => ({ ...prev, isAvailable: checked }))}
+              />
             </div>
             <DialogFooter>
-              <Button type="submit">新增商品</Button>
+              <Button type="submit" className="w-full">確認新增</Button>
             </DialogFooter>
           </form>
         </DialogContent>
       </Dialog>
 
+      {/* 編輯商品 Dialog */}
       <Dialog open={showEditDialog} onOpenChange={setShowEditDialog}>
-        <DialogContent className="sm:max-w-[500px]">
+        <DialogContent>
           <DialogHeader>
             <DialogTitle>編輯商品</DialogTitle>
-            <DialogDescription>修改商品資訊</DialogDescription>
+            <DialogDescription>修改以下欄位以更新商品資料</DialogDescription>
           </DialogHeader>
-          <form onSubmit={handleEditProduct}>
-            <div className="grid gap-4 py-4">
-              <div className="grid gap-2">
-                <Label htmlFor="edit-name">商品名稱</Label>
-                <Input
-                  id="edit-name"
-                  name="name"
-                  placeholder="請輸入商品名稱"
-                  value={formData.name}
-                  onChange={handleInputChange}
-                />
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="edit-description">商品描述</Label>
-                <Textarea
-                  id="edit-description"
-                  name="description"
-                  placeholder="請輸入商品描述"
-                  value={formData.description}
-                  onChange={handleInputChange}
-                />
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="edit-price">價格</Label>
-                <Input
-                  id="edit-price"
-                  name="price"
-                  type="number"
-                  placeholder="請輸入價格"
-                  value={formData.price}
-                  onChange={handleInputChange}
-                />
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="edit-category">分類</Label>
-                <Select value={formData.category} onValueChange={handleSelectChange}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="選擇分類" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="主餐">主餐</SelectItem>
-                    <SelectItem value="配菜">配菜</SelectItem>
-                    <SelectItem value="飲料">飲料</SelectItem>
-                    <SelectItem value="甜點">甜點</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="edit-image">圖片網址</Label>
-                <Input
-                  id="edit-image"
-                  name="image"
-                  placeholder="請輸入圖片網址"
-                  value={formData.image}
-                  onChange={handleInputChange}
-                />
-              </div>
-              <div className="flex items-center space-x-2">
-                <Switch id="edit-isAvailable" checked={formData.isAvailable} onCheckedChange={handleSwitchChange} />
-                <Label htmlFor="edit-isAvailable">上架商品</Label>
-              </div>
+          <form onSubmit={handleEditProduct} className="space-y-4">
+            <Label>名稱</Label>
+            <Input name="name" value={formData.name} onChange={handleInputChange} required />
+            <Label>描述</Label>
+            <Textarea name="description" value={formData.description} onChange={handleInputChange} />
+            <Label>價格</Label>
+            <Input name="price" type="number" value={formData.price} onChange={handleInputChange} required />
+            <Label>類別</Label>
+            <Input name="category" value={formData.category} onChange={handleInputChange} />
+            <Label>圖片 URL</Label>
+            <Input name="image" value={formData.image} onChange={handleInputChange} />
+            <div className="flex items-center space-x-2">
+              <Label>是否供應</Label>
+              <Switch
+                checked={formData.isAvailable}
+                onCheckedChange={checked => setFormData(prev => ({ ...prev, isAvailable: checked }))}
+              />
             </div>
             <DialogFooter>
-              <Button type="submit">儲存變更</Button>
+              <Button type="submit" className="w-full">確認更新</Button>
             </DialogFooter>
           </form>
         </DialogContent>

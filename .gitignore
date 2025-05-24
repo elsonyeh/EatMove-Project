@@ -25,3 +25,6 @@ dist-ssr
 .next/
 .env
 node_modules/
+node_modules/
+.next/
+.env
