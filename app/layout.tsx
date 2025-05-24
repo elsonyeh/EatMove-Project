@@ -1,27 +1,32 @@
-import type React from "react"
 import type { Metadata } from "next"
-import { Nunito } from "next/font/google"
+import { Inter } from "next/font/google"
 import "./globals.css"
 import { ThemeProvider } from "@/components/theme-provider"
+import { Toaster } from "@/components/ui/toaster"
 
-const nunito = Nunito({ subsets: ["latin"] })
+const inter = Inter({ subsets: ["latin"] })
 
 export const metadata: Metadata = {
-  title: "EatMove - 美食外送平台",
-  description: "EatMove - 連接美食與您的生活，快速送達您的味蕾",
-    generator: 'v0.dev'
+  title: "食在好時 - 美食外送平台",
+  description: "美食外送平台",
 }
 
 export default function RootLayout({
   children,
-}: Readonly<{
+}: {
   children: React.ReactNode
-}>) {
+}) {
   return (
     <html lang="zh-TW" suppressHydrationWarning>
-      <body className={nunito.className}>
-        <ThemeProvider attribute="class" defaultTheme="light" enableSystem disableTransitionOnChange>
+      <body className={inter.className} suppressHydrationWarning>
+        <ThemeProvider
+          attribute="class"
+          defaultTheme="system"
+          enableSystem
+          disableTransitionOnChange
+        >
           {children}
+          <Toaster />
         </ThemeProvider>
       </body>
     </html>
