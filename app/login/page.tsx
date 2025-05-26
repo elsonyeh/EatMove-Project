@@ -12,6 +12,7 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { useToast } from "@/components/ui/use-toast"
 import { BrandLogo } from "@/components/brand-logo"
 import Script from 'next/script'
+import { FACE_CONFIG, calculateCosineSimilarity, assessFaceQuality, MultiVerificationManager, drawFaceDetectionOverlay, checkFacePosition } from "@/lib/face-config"
 
 // 移除 face-api.js 的直接引入
 declare const faceapi: any
@@ -36,6 +37,7 @@ export default function LoginPage() {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const [modelsLoaded, setModelsLoaded] = useState(false)
   const [stream, setStream] = useState<MediaStream | null>(null)
+  const verificationManagerRef = useRef<MultiVerificationManager>(new MultiVerificationManager())
 
   // 載入人臉辨識模型
   useEffect(() => {
@@ -43,6 +45,7 @@ export default function LoginPage() {
       const MODEL_URL = '/models'
       try {
         await Promise.all([
+          faceapi.nets.ssdMobilenetv1.loadFromUri(MODEL_URL),
           faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL),
           faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL),
           faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL),
@@ -327,6 +330,7 @@ export default function LoginPage() {
     setIsFaceLoginMode(false)
     setIsEmailVerified(false)
     setFaceDetected(false)
+    verificationManagerRef.current.reset()  // 重置驗證管理器
     localStorage.removeItem('tempUserId')
     localStorage.removeItem('tempEmail')
   }
@@ -340,7 +344,7 @@ export default function LoginPage() {
 
     let animationFrameId: number
     let lastDetectionTime = 0
-    const DETECTION_INTERVAL = 100
+    const DETECTION_INTERVAL = FACE_CONFIG.DETECTION_INTERVAL
 
     // 根據用戶類型設定正確的角色
     let role = ""
@@ -371,55 +375,15 @@ export default function LoginPage() {
       }
 
       try {
-        // 使用更寬鬆的檢測選項
-        const detections = await faceapi.detectAllFaces(video, new faceapi.TinyFaceDetectorOptions({
-          inputSize: 416,
-          scoreThreshold: 0.3  // 降低閾值以提高檢測率
-        }))
+        // 使用更精準的檢測選項
+        const detections = await faceapi.detectAllFaces(video, new faceapi.SsdMobilenetv1Options(
+          FACE_CONFIG.DETECTOR_OPTIONS.SSD_MOBILENET
+        ))
           .withFaceLandmarks()
           .withFaceDescriptors()
 
-        // 設定 canvas 尺寸
-        canvas.width = video.videoWidth
-        canvas.height = video.videoHeight
-
-        const context = canvas.getContext('2d')
-        if (!context) return
-
-        context.clearRect(0, 0, canvas.width, canvas.height)
-
-        // 繪製理想位置的框框
-        const idealSize = Math.min(canvas.width, canvas.height) * 0.6  // 稍微縮小理想區域
-        const idealX = (canvas.width - idealSize) / 2
-        const idealY = (canvas.height - idealSize) / 2
-
-        // 繪製外框
-        context.strokeStyle = '#ffffff'
-        context.lineWidth = 3
-        context.setLineDash([5, 5])
-        context.strokeRect(idealX, idealY, idealSize, idealSize)
-
-        // 繪製四角標記
-        const cornerSize = 30
-        context.setLineDash([])
-        context.beginPath()
-        // 左上角
-        context.moveTo(idealX, idealY + cornerSize)
-        context.lineTo(idealX, idealY)
-        context.lineTo(idealX + cornerSize, idealY)
-        // 右上角
-        context.moveTo(idealX + idealSize - cornerSize, idealY)
-        context.lineTo(idealX + idealSize, idealY)
-        context.lineTo(idealX + idealSize, idealY + cornerSize)
-        // 右下角
-        context.moveTo(idealX + idealSize, idealY + idealSize - cornerSize)
-        context.lineTo(idealX + idealSize, idealY + idealSize)
-        context.lineTo(idealX + idealSize - cornerSize, idealY + idealSize)
-        // 左下角
-        context.moveTo(idealX + cornerSize, idealY + idealSize)
-        context.lineTo(idealX, idealY + idealSize)
-        context.lineTo(idealX, idealY + idealSize - cornerSize)
-        context.stroke()
+        // 設定 canvas 尺寸並繪製檢測框
+        drawFaceDetectionOverlay(canvas, video.videoWidth, video.videoHeight, detections)
 
         console.log(`檢測到 ${detections.length} 個人臉`)
 
@@ -459,6 +423,10 @@ export default function LoginPage() {
           console.log('檢測到的descriptor:', detection.descriptor ? `存在，長度: ${detection.descriptor.length}` : '不存在')
           console.log('完整檢測物件結構:', Object.keys(detection))
 
+          // 評估人臉品質
+          const qualityAssessment = assessFaceQuality(detection)
+          console.log('人臉品質評估:', qualityAssessment)
+
           if (!box) {
             // 如果沒有邊界框，嘗試從 landmarks 計算
             if (detection.landmarks && detection.landmarks.positions) {
@@ -492,60 +460,30 @@ export default function LoginPage() {
             x: box.x,
             y: box.y,
             width: box.width,
-            height: box.height,
-            idealX,
-            idealY,
-            idealSize
+            height: box.height
           })
 
-          // 更寬鬆的位置檢查
-          const margin = 20  // 增加邊距容忍度
-          const isInPosition = (
-            box.x > (idealX - margin) &&
-            box.y > (idealY - margin) &&
-            box.x + box.width < (idealX + idealSize + margin) &&
-            box.y + box.height < (idealY + idealSize + margin) &&
-            box.width > 50 && box.height > 50  // 確保人臉夠大
-          )
+          // 使用新的位置檢查函數
+          const positionCheck = checkFacePosition(box, canvas.width, canvas.height)
+          const isInPosition = positionCheck.isInPosition
 
           console.log('位置檢查結果:', {
             isInPosition,
-            xCheck: box.x > (idealX - margin),
-            yCheck: box.y > (idealY - margin),
-            widthCheck: box.x + box.width < (idealX + idealSize + margin),
-            heightCheck: box.y + box.height < (idealY + idealSize + margin),
-            sizeCheck: box.width > 50 && box.height > 50
+            message: positionCheck.message,
+            qualityScore: qualityAssessment.score
           })
 
           // 設定人臉檢測狀態
-          setFaceDetected(isInPosition)
-
-          // 繪製人臉檢測框
-          context.strokeStyle = isInPosition ? '#00ff00' : '#ff0000'
-          context.lineWidth = 3
-          context.setLineDash([])
-          context.strokeRect(box.x, box.y, box.width, box.height)
+          setFaceDetected(isInPosition && qualityAssessment.score > FACE_CONFIG.MULTI_VERIFICATION.MIN_QUALITY_SCORE)
 
           // 設定狀態訊息
-          if (!isInPosition) {
-            let message = ''
-            if (box.x <= (idealX - margin)) {
-              message = '請向右移動一些'
-            } else if (box.x + box.width >= (idealX + idealSize + margin)) {
-              message = '請向左移動一些'
-            } else if (box.y <= (idealY - margin)) {
-              message = '請向下移動一些'
-            } else if (box.y + box.height >= (idealY + idealSize + margin)) {
-              message = '請向上移動一些'
-            } else if (box.width > idealSize * 1.2 || box.height > idealSize * 1.2) {
-              message = '請後退一些，臉部太大'
-            } else if (box.width < 50 || box.height < 50) {
-              message = '請靠近一些，臉部太小'
+          if (!isInPosition || qualityAssessment.score <= FACE_CONFIG.MULTI_VERIFICATION.MIN_QUALITY_SCORE) {
+            if (qualityAssessment.score <= FACE_CONFIG.MULTI_VERIFICATION.MIN_QUALITY_SCORE) {
+              setFaceStatusMessage(`人臉品質不足 (${(qualityAssessment.score * 100).toFixed(0)}%)：${qualityAssessment.issues.join(', ')}`)
             } else {
-              message = '請微調位置到框框中心'
+              setFaceStatusMessage(positionCheck.message)
             }
-            setFaceStatusMessage(message)
-            console.log('位置不正確:', message)
+            console.log('位置或品質不正確:', positionCheck.message, '品質:', qualityAssessment.score)
           } else {
             console.log('位置正確，開始檢查特徵')
 
@@ -606,30 +544,50 @@ export default function LoginPage() {
                 isFloat32Array: storedDescriptor instanceof Float32Array
               })
 
-              // 計算特徵相似度
+              // 計算特徵相似度 - 使用更精準的方法
               const distance = faceapi.euclideanDistance(currentFaceDescriptor, storedDescriptor)
+
+              // 使用餘弦相似度作為輔助判斷
+              const cosineSimilarity = calculateCosineSimilarity(currentFaceDescriptor, storedDescriptor)
+
               const similarity = (1 - distance) * 100
+              const cosinePercent = cosineSimilarity * 100
               setLastDistance(distance)
 
               console.log('相似度計算結果:', {
-                distance,
-                similarity: similarity.toFixed(1) + '%',
-                threshold: 0.75,
-                willPass: distance < 0.75
+                euclideanDistance: distance,
+                euclideanSimilarity: similarity.toFixed(1) + '%',
+                cosineSimilarity: cosineSimilarity.toFixed(3),
+                cosinePercent: cosinePercent.toFixed(1) + '%',
+                qualityScore: qualityAssessment.score,
+                thresholds: {
+                  euclidean: FACE_CONFIG.SIMILARITY_THRESHOLDS.EUCLIDEAN_STRICT,
+                  cosine: FACE_CONFIG.SIMILARITY_THRESHOLDS.COSINE_STRICT
+                }
               })
 
-              // 進一步放寬閾值，並提供更多嘗試機會
-              if (distance < 0.75) {
-                setFaceStatusMessage('人臉辨識成功！正在登入...')
-                console.log('人臉辨識成功，準備登入')
+              // 使用多重驗證系統
+              const verificationManager = verificationManagerRef.current
+              const isVerified = verificationManager.addMatch(distance, cosineSimilarity, qualityAssessment.score)
+
+              if (isVerified) {
+                const averageScores = verificationManager.getAverageScores()
+                setFaceStatusMessage('多重驗證成功！正在登入...')
+                console.log('多重驗證成功，平均分數:', averageScores)
                 handleFaceLoginSuccess(data.data.userId)
                 return
-              } else if (distance < 0.9) {  // 給予提示但繼續嘗試
-                setFaceStatusMessage(`相似度 ${similarity.toFixed(1)}% 接近通過，請保持位置繼續嘗試`)
-                console.log('相似度接近，繼續嘗試')
               } else {
-                setFaceStatusMessage(`相似度 ${similarity.toFixed(1)}% 不足，請嘗試不同角度或表情`)
-                console.log('相似度不足')
+                const matchCount = verificationManager.getMatchCount()
+                const required = FACE_CONFIG.MULTI_VERIFICATION.REQUIRED_CONSECUTIVE_MATCHES
+
+                if (distance < FACE_CONFIG.SIMILARITY_THRESHOLDS.EUCLIDEAN_NORMAL &&
+                  cosineSimilarity > FACE_CONFIG.SIMILARITY_THRESHOLDS.COSINE_NORMAL) {
+                  setFaceStatusMessage(`驗證進度 ${matchCount}/${required} - 相似度良好，請保持位置`)
+                  console.log('相似度良好，繼續驗證')
+                } else {
+                  setFaceStatusMessage(`相似度不足 (歐氏: ${similarity.toFixed(1)}%, 餘弦: ${cosinePercent.toFixed(1)}%, 品質: ${(qualityAssessment.score * 100).toFixed(0)}%)`)
+                  console.log('相似度不足')
+                }
               }
             } catch (error) {
               console.error('人臉比對過程發生錯誤:', error)

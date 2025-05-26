@@ -5,7 +5,7 @@ export async function POST(req: Request) {
   try {
     const { userId, role, faceDescriptor } = await req.json();
 
-    if (!userId || !role || !faceDescriptor) {
+    if (!userId || !role) {
       return NextResponse.json(
         { success: false, message: "缺少必要欄位" },
         { status: 400 }
@@ -13,6 +13,9 @@ export async function POST(req: Request) {
     }
 
     let result;
+    const isRemoving = faceDescriptor === null;
+    const message = isRemoving ? "人臉特徵移除成功" : "人臉特徵註冊成功";
+
     if (role === "member") {
       result = await pool.query(
         `UPDATE member 
@@ -45,13 +48,13 @@ export async function POST(req: Request) {
 
     return NextResponse.json({
       success: true,
-      message: "人臉特徵註冊成功",
+      message,
       data: result.rows[0]
     });
   } catch (error: any) {
-    console.error("人臉特徵註冊失敗:", error);
+    console.error("人臉特徵操作失敗:", error);
     return NextResponse.json(
-      { success: false, message: "人臉特徵註冊失敗", error: error.message },
+      { success: false, message: "人臉特徵操作失敗", error: error.message },
       { status: 500 }
     );
   }

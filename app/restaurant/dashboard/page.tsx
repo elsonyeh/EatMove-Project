@@ -5,40 +5,136 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Badge } from "@/components/ui/badge"
 import { OrderCard } from "@/components/order-card"
-import { restaurantOrders } from "@/lib/data"
 import { useRestaurantAuth } from "@/components/restaurant-auth-provider"
 import { Skeleton } from "@/components/ui/skeleton"
+import { useToast } from "@/hooks/use-toast"
+
+interface RestaurantData {
+  rid: number
+  name: string
+  rating: number
+  minOrder: number
+  image: string
+  businessHours: string
+  isOpen: boolean
+  deliveryArea: string
+  cuisine: string
+}
+
+interface StatsData {
+  todayOrders: number
+  todayRevenue: number
+  currentRating: number
+  pendingOrders: number
+  preparingOrders: number
+  completedOrders: number
+  cancelledOrders: number
+  orderChangePercent: number
+  revenueChangePercent: number
+  ratingChange: number
+}
+
+interface OrderData {
+  id: number
+  orderNumber: string
+  customerName: string
+  customerPhone: string
+  customerAddress: string
+  items: any[]
+  total: number
+  deliveryFee: number
+  status: string
+  orderTime: string
+  estimatedDeliveryTime?: string
+  actualDeliveryTime?: string
+  notes?: string
+  paymentMethod: string
+}
+
+interface DashboardData {
+  restaurant: RestaurantData
+  stats: StatsData
+  orders: OrderData[]
+}
 
 export default function RestaurantDashboardPage() {
   const { account } = useRestaurantAuth()
+  const { toast } = useToast()
   const [loading, setLoading] = useState(true)
-  const [orders, setOrders] = useState<any[]>([])
+  const [dashboardData, setDashboardData] = useState<DashboardData | null>(null)
 
   useEffect(() => {
-    if (account) {
-      // 模擬加載數據
-      setTimeout(() => {
-        // 根據餐廳ID過濾訂單
-        const filteredOrders = restaurantOrders.map((order) => ({
-          ...order,
-          restaurant: account.restaurantName,
-        }))
-        setOrders(filteredOrders)
-        setLoading(false)
-      }, 800)
+    if (account?.restaurantId) {
+      fetchDashboardData()
     }
   }, [account])
 
+  const fetchDashboardData = async () => {
+    try {
+      setLoading(true)
+      const response = await fetch(`/api/restaurant/dashboard?rid=${account?.restaurantId}`)
+      const result = await response.json()
+
+      if (result.success) {
+        setDashboardData(result.data)
+      } else {
+        toast({
+          title: "錯誤",
+          description: result.message || "獲取儀表板資料失敗",
+          variant: "destructive",
+        })
+      }
+    } catch (error) {
+      console.error("獲取儀表板資料失敗:", error)
+      toast({
+        title: "錯誤",
+        description: "獲取儀表板資料失敗",
+        variant: "destructive",
+      })
+    } finally {
+      setLoading(false)
+    }
+  }
+
   // 根據訂單狀態分類
-  const pendingOrders = orders.filter((order) => order.status === "pending")
-  const preparingOrders = orders.filter((order) => order.status === "preparing")
-  const completedOrders = orders.filter((order) => order.status === "completed")
+  const pendingOrders = dashboardData?.orders.filter((order) => order.status === "pending") || []
+  const preparingOrders = dashboardData?.orders.filter((order) => order.status === "preparing") || []
+  const completedOrders = dashboardData?.orders.filter((order) => order.status === "completed") || []
+
+  const formatCurrency = (amount: number) => {
+    return new Intl.NumberFormat('zh-TW', {
+      style: 'currency',
+      currency: 'TWD',
+      minimumFractionDigits: 0,
+    }).format(amount)
+  }
+
+  const formatPercentChange = (percent: number) => {
+    const sign = percent >= 0 ? '+' : ''
+    const color = percent >= 0 ? 'text-green-500' : 'text-red-500'
+    return <span className={color}>{sign}{percent}%</span>
+  }
 
   return (
     <div className="container py-6">
       <div className="mb-8">
-        <h1 className="text-3xl font-bold tracking-tight mb-2">{account?.restaurantName || "餐廳"} 管理中心</h1>
+        <h1 className="text-3xl font-bold tracking-tight mb-2">
+          {dashboardData?.restaurant.name || account?.restaurantName || "餐廳"} 管理中心
+        </h1>
         <p className="text-muted-foreground">管理您的訂單和商品</p>
+        {dashboardData?.restaurant && (
+          <div className="mt-4 flex flex-wrap gap-2 text-sm text-muted-foreground">
+            <span>評分: {dashboardData.restaurant.rating.toFixed(1)} ⭐</span>
+            <span>•</span>
+            <span>最低訂購: {formatCurrency(dashboardData.restaurant.minOrder)}</span>
+            <span>•</span>
+            <span>營業時間: {dashboardData.restaurant.businessHours}</span>
+            <span>•</span>
+            <span className={dashboardData.restaurant.isOpen ? "text-green-600" : "text-red-600"}>
+              {dashboardData.restaurant.isOpen ? "營業中" : "休息中"}
+            </span>
+          </div>
+        )}
       </div>
 
       {loading ? (
@@ -63,10 +159,10 @@ export default function RestaurantDashboardPage() {
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold text-brand-primary">
-                {pendingOrders.length + preparingOrders.length + completedOrders.length}
+                {dashboardData?.stats.todayOrders || 0}
               </div>
               <p className="text-xs text-muted-foreground">
-                較昨日 <span className="text-green-500">+12.5%</span>
+                較昨日 {formatPercentChange(dashboardData?.stats.orderChangePercent || 0)}
               </p>
             </CardContent>
           </Card>
@@ -75,9 +171,11 @@ export default function RestaurantDashboardPage() {
               <CardTitle className="text-sm font-medium text-brand-secondary">今日營收</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-brand-secondary">$1,254</div>
+              <div className="text-2xl font-bold text-brand-secondary">
+                {formatCurrency(dashboardData?.stats.todayRevenue || 0)}
+              </div>
               <p className="text-xs text-muted-foreground">
-                較昨日 <span className="text-green-500">+8.2%</span>
+                較昨日 {formatPercentChange(dashboardData?.stats.revenueChangePercent || 0)}
               </p>
             </CardContent>
           </Card>
@@ -86,9 +184,11 @@ export default function RestaurantDashboardPage() {
               <CardTitle className="text-sm font-medium text-brand-accent">平均評分</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-brand-accent">4.8</div>
+              <div className="text-2xl font-bold text-brand-accent">
+                {dashboardData?.stats.currentRating.toFixed(1) || "4.5"}
+              </div>
               <p className="text-xs text-muted-foreground">
-                較上週 <span className="text-green-500">+0.2</span>
+                較上週 {formatPercentChange(dashboardData?.stats.ratingChange || 0)}
               </p>
             </CardContent>
           </Card>
@@ -130,7 +230,7 @@ export default function RestaurantDashboardPage() {
           ) : pendingOrders.length > 0 ? (
             <div className="grid gap-4">
               {pendingOrders.map((order) => (
-                <OrderCard key={order.id} order={order} />
+                <OrderCard key={order.id} order={order} onStatusChange={fetchDashboardData} />
               ))}
             </div>
           ) : (
@@ -155,7 +255,7 @@ export default function RestaurantDashboardPage() {
           ) : preparingOrders.length > 0 ? (
             <div className="grid gap-4">
               {preparingOrders.map((order) => (
-                <OrderCard key={order.id} order={order} />
+                <OrderCard key={order.id} order={order} onStatusChange={fetchDashboardData} />
               ))}
             </div>
           ) : (
@@ -180,7 +280,7 @@ export default function RestaurantDashboardPage() {
           ) : completedOrders.length > 0 ? (
             <div className="grid gap-4">
               {completedOrders.map((order) => (
-                <OrderCard key={order.id} order={order} />
+                <OrderCard key={order.id} order={order} onStatusChange={fetchDashboardData} />
               ))}
             </div>
           ) : (

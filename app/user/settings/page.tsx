@@ -25,6 +25,7 @@ export default function UserSettingsPage() {
       const MODEL_URL = '/models'
       try {
         await Promise.all([
+          faceapi.nets.ssdMobilenetv1.loadFromUri(MODEL_URL),
           faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL),
           faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL),
           faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL),
@@ -92,7 +93,10 @@ export default function UserSettingsPage() {
     if (!videoRef.current || !modelsLoaded) return
 
     try {
-      const detections = await faceapi.detectAllFaces(videoRef.current, new faceapi.TinyFaceDetectorOptions())
+      const detections = await faceapi.detectAllFaces(videoRef.current, new faceapi.SsdMobilenetv1Options({
+        minConfidence: 0.7,  // 從預設值提高到 0.7，提升檢測準確性
+        maxResults: 1        // 限制最多檢測一個人臉
+      }))
         .withFaceLandmarks()
         .withFaceDescriptors()
 

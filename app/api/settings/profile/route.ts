@@ -1,6 +1,58 @@
 import { NextResponse } from "next/server";
 import { pool } from "@/lib/db";
 
+// 獲取用戶資料
+export async function GET(req: Request) {
+  try {
+    const { searchParams } = new URL(req.url);
+    const userId = searchParams.get("userId");
+    const role = searchParams.get("role");
+
+    if (!userId || !role) {
+      return NextResponse.json(
+        { success: false, message: "缺少必要參數" },
+        { status: 400 }
+      );
+    }
+
+    let result;
+    if (role === "member") {
+      result = await pool.query(
+        "SELECT mid, name, email, phonenumber, address, face_descriptor FROM member WHERE mid = $1",
+        [userId]
+      );
+    } else if (role === "deliveryman") {
+      result = await pool.query(
+        "SELECT did, dname, demail, dphonenumber, face_descriptor FROM deliveryman WHERE did = $1",
+        [userId]
+      );
+    } else {
+      return NextResponse.json(
+        { success: false, message: "無效的角色類型" },
+        { status: 400 }
+      );
+    }
+
+    if (result.rows.length === 0) {
+      return NextResponse.json(
+        { success: false, message: "找不到用戶" },
+        { status: 404 }
+      );
+    }
+
+    return NextResponse.json({
+      success: true,
+      data: result.rows[0]
+    });
+  } catch (error: any) {
+    console.error("獲取用戶資料失敗:", error);
+    return NextResponse.json(
+      { success: false, message: "獲取用戶資料失敗", error: error.message },
+      { status: 500 }
+    );
+  }
+}
+
 export async function PUT(req: Request) {
   try {
     const { userId, role, name, email, phonenumber, address } = await req.json();

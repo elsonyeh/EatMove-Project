@@ -1,0 +1,4 @@
+# 忽略所有上傳的檔案，但保留目錄結構
+*
+!.gitignore
+!restaurants/.gitkeep 

@@ -10,7 +10,6 @@ import { useState } from "react"
 import { useFavorites } from "@/hooks/use-favorites"
 import { Badge } from "@/components/ui/badge"
 import type { Restaurant } from "@/lib/data"
-import { getRestaurantCover } from "@/utils/image-utils"
 
 interface RestaurantCardProps {
   restaurant: Restaurant
@@ -58,7 +57,7 @@ export function RestaurantCard({ restaurant, isFavorite: initialIsFavorite }: Re
         {/* 圖片容器 */}
         <div className="relative overflow-hidden aspect-[4/3]">
           <Image
-            src={getRestaurantCover(name) || "/placeholder.svg"}
+            src={coverImage || "/placeholder.svg"}
             alt={name}
             fill
             className="object-cover transition-transform duration-500 group-hover:scale-105"
@@ -93,13 +92,6 @@ export function RestaurantCard({ restaurant, isFavorite: initialIsFavorite }: Re
             <Star className="h-3.5 w-3.5 text-yellow-500 fill-yellow-500 mr-1" />
             <span className="text-sm font-medium">{rating}</span>
           </div>
-
-          {/* 料理類型 */}
-          <div className="absolute bottom-3 right-3">
-            <Badge variant="outline" className="bg-white/90 backdrop-blur-sm border-none text-gray-700">
-              {cuisine}
-            </Badge>
-          </div>
         </div>
 
         {/* 內容區域 */}
@@ -115,9 +107,13 @@ export function RestaurantCard({ restaurant, isFavorite: initialIsFavorite }: Re
           <div className="flex items-center text-sm text-gray-500 mb-2">
             <Clock className="h-3.5 w-3.5 mr-1.5" />
             <span>{deliveryTime}</span>
-            <span className="mx-2">•</span>
-            <MapPin className="h-3.5 w-3.5 mr-1.5" />
-            <span>{distance}</span>
+            {distance && (
+              <>
+                <span className="mx-2">•</span>
+                <MapPin className="h-3.5 w-3.5 mr-1.5" />
+                <span>{distance}</span>
+              </>
+            )}
           </div>
 
           <div className="flex items-center justify-between text-sm pt-2 border-t border-gray-100">

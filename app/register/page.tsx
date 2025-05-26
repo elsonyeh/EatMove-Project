@@ -19,6 +19,7 @@ import {
 import { useToast } from "@/components/ui/use-toast"
 import { BrandLogo } from "@/components/brand-logo"
 import Script from 'next/script'
+import { FACE_CONFIG, drawFaceDetectionOverlay, checkFacePosition } from "@/lib/face-config"
 
 // 移除 face-api.js 的直接引入
 declare const faceapi: any
@@ -41,7 +42,7 @@ export default function RegisterPage() {
   const [faceDetected, setFaceDetected] = useState(false)
   const [isCapturing, setIsCapturing] = useState(false)
   const [captureCount, setCaptureCount] = useState(0)
-  const REQUIRED_CAPTURES = 5
+  const REQUIRED_CAPTURES = FACE_CONFIG.REGISTRATION.REQUIRED_CAPTURES
   const [faceDescriptors, setFaceDescriptors] = useState<Float32Array[]>([])
   const [phonenumber, setPhoneNumber] = useState("")
   const [passwordError, setPasswordError] = useState<string | null>(null)
@@ -64,6 +65,7 @@ export default function RegisterPage() {
       const MODEL_URL = '/models'
       try {
         await Promise.all([
+          faceapi.nets.ssdMobilenetv1.loadFromUri(MODEL_URL),
           faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL),
           faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL),
           faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL),
@@ -297,13 +299,10 @@ export default function RegisterPage() {
     try {
       setIsCapturing(true)
 
-      // 使用更寬鬆的檢測選項
+      // 使用更精準的檢測選項
       const detections = await faceapi.detectAllFaces(
         videoRef.current,
-        new faceapi.TinyFaceDetectorOptions({
-          inputSize: 416,
-          scoreThreshold: 0.3  // 降低閾值以提高檢測率
-        })
+        new faceapi.SsdMobilenetv1Options(FACE_CONFIG.DETECTOR_OPTIONS.SSD_MOBILENET)
       )
         .withFaceLandmarks()
         .withFaceDescriptors()
@@ -422,7 +421,7 @@ export default function RegisterPage() {
   useEffect(() => {
     let animationFrameId: number
     let lastDetectionTime = 0
-    const DETECTION_INTERVAL = 100
+    const DETECTION_INTERVAL = FACE_CONFIG.DETECTION_INTERVAL
 
     const detectFace = async () => {
       if (!videoRef.current || !isFaceRegistering || !modelsLoaded) return
@@ -445,73 +444,21 @@ export default function RegisterPage() {
 
         const detections = await faceapi.detectAllFaces(
           video,
-          new faceapi.TinyFaceDetectorOptions({
-            inputSize: 416,
-            scoreThreshold: 0.3  // 降低閾值以提高檢測率
-          })
+          new faceapi.SsdMobilenetv1Options(FACE_CONFIG.DETECTOR_OPTIONS.SSD_MOBILENET)
         )
 
         if (canvas) {
-          canvas.width = video.videoWidth
-          canvas.height = video.videoHeight
+          // 使用新的繪製函數
+          drawFaceDetectionOverlay(canvas, video.videoWidth, video.videoHeight, detections)
 
-          const context = canvas.getContext('2d')
-          if (context) {
-            context.clearRect(0, 0, canvas.width, canvas.height)
+          if (detections.length === 1) {
+            const detection = detections[0]
+            const box = detection.box
 
-            // 增大理想位置的框框
-            const idealSize = Math.min(canvas.width, canvas.height) * 0.7 // 增加到 70% 的大小
-            const idealX = (canvas.width - idealSize) / 2
-            const idealY = (canvas.height - idealSize) / 2
-
-            // 繪製外框
-            context.strokeStyle = '#ffffff'
-            context.lineWidth = 3
-            context.setLineDash([5, 5])
-            context.strokeRect(idealX, idealY, idealSize, idealSize)
-
-            // 繪製四角標記
-            const cornerSize = 30 // 增加角標記的大小
-            context.setLineDash([])
-            context.beginPath()
-            // 左上角
-            context.moveTo(idealX, idealY + cornerSize)
-            context.lineTo(idealX, idealY)
-            context.lineTo(idealX + cornerSize, idealY)
-            // 右上角
-            context.moveTo(idealX + idealSize - cornerSize, idealY)
-            context.lineTo(idealX + idealSize, idealY)
-            context.lineTo(idealX + idealSize, idealY + cornerSize)
-            // 右下角
-            context.moveTo(idealX + idealSize, idealY + idealSize - cornerSize)
-            context.lineTo(idealX + idealSize, idealY + idealSize)
-            context.lineTo(idealX + idealSize - cornerSize, idealY + idealSize)
-            // 左下角
-            context.moveTo(idealX + cornerSize, idealY + idealSize)
-            context.lineTo(idealX, idealY + idealSize)
-            context.lineTo(idealX, idealY + idealSize - cornerSize)
-            context.stroke()
-
-            if (detections.length === 1) {
-              const detection = detections[0]
-              const box = detection.box
-
-              const isInPosition = (
-                box.x > idealX &&
-                box.y > idealY &&
-                box.x + box.width < idealX + idealSize &&
-                box.y + box.height < idealY + idealSize
-              )
-
-              context.strokeStyle = isInPosition ? '#00ff00' : '#ff0000'
-              context.lineWidth = 2
-              context.setLineDash([])
-              context.strokeRect(box.x, box.y, box.width, box.height)
-
-              setFaceDetected(isInPosition)
-            } else {
-              setFaceDetected(false)
-            }
+            const positionCheck = checkFacePosition(box, canvas.width, canvas.height)
+            setFaceDetected(positionCheck.isInPosition)
+          } else {
+            setFaceDetected(false)
           }
         }
       } catch (error) {

@@ -9,6 +9,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { useToast } from "@/components/ui/use-toast"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import Script from 'next/script'
+import { FACE_CONFIG, drawFaceDetectionOverlay, checkFacePosition } from "@/lib/face-config"
 
 declare const faceapi: any
 
@@ -24,7 +25,7 @@ export default function SettingsPage() {
     const [faceDetected, setFaceDetected] = useState(false)
     const [isCapturing, setIsCapturing] = useState(false)
     const [captureCount, setCaptureCount] = useState(0)
-    const REQUIRED_CAPTURES = 3
+    const REQUIRED_CAPTURES = FACE_CONFIG.REGISTRATION.REQUIRED_CAPTURES
     const videoRef = useRef<HTMLVideoElement>(null)
     const canvasRef = useRef<HTMLCanvasElement>(null)
 
@@ -84,6 +85,7 @@ export default function SettingsPage() {
             const MODEL_URL = '/models'
             try {
                 await Promise.all([
+                    faceapi.nets.ssdMobilenetv1.loadFromUri(MODEL_URL),
                     faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL),
                     faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL),
                     faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL),
@@ -200,7 +202,7 @@ export default function SettingsPage() {
     useEffect(() => {
         let animationFrameId: number
         let lastDetectionTime = 0
-        const DETECTION_INTERVAL = 100
+        const DETECTION_INTERVAL = FACE_CONFIG.DETECTION_INTERVAL
 
         const detectFace = async () => {
             if (!videoRef.current || !isFaceRegistering || !modelsLoaded) return
@@ -223,76 +225,23 @@ export default function SettingsPage() {
 
                 const detections = await faceapi.detectAllFaces(
                     video,
-                    new faceapi.TinyFaceDetectorOptions()
+                    new faceapi.SsdMobilenetv1Options(FACE_CONFIG.DETECTOR_OPTIONS.SSD_MOBILENET)
                 )
+                    .withFaceLandmarks()
+                    .withFaceDescriptors()
 
                 if (canvas) {
-                    canvas.width = video.videoWidth
-                    canvas.height = video.videoHeight
+                    // 使用新的繪製函數
+                    drawFaceDetectionOverlay(canvas, video.videoWidth, video.videoHeight, detections)
 
-                    const context = canvas.getContext('2d')
-                    if (context) {
-                        context.clearRect(0, 0, canvas.width, canvas.height)
+                    if (detections.length === 1) {
+                        const detection = detections[0]
+                        const box = detection.box
 
-                        const idealSize = Math.min(canvas.width, canvas.height) * 0.5
-                        const idealX = (canvas.width - idealSize) / 2
-                        const idealY = (canvas.height - idealSize) / 2
-
-                        context.strokeStyle = '#ffffff'
-                        context.lineWidth = 3
-                        context.setLineDash([5, 5])
-                        context.strokeRect(idealX, idealY, idealSize, idealSize)
-
-                        const cornerSize = 20
-                        context.setLineDash([])
-                        context.beginPath()
-                        // 左上角
-                        context.moveTo(idealX, idealY + cornerSize)
-                        context.lineTo(idealX, idealY)
-                        context.lineTo(idealX + cornerSize, idealY)
-                        // 右上角
-                        context.moveTo(idealX + idealSize - cornerSize, idealY)
-                        context.lineTo(idealX + idealSize, idealY)
-                        context.lineTo(idealX + idealSize, idealY + cornerSize)
-                        // 右下角
-                        context.moveTo(idealX + idealSize, idealY + idealSize - cornerSize)
-                        context.lineTo(idealX + idealSize, idealY + idealSize)
-                        context.lineTo(idealX + idealSize - cornerSize, idealY + idealSize)
-                        // 左下角
-                        context.moveTo(idealX + cornerSize, idealY + idealSize)
-                        context.lineTo(idealX, idealY + idealSize)
-                        context.lineTo(idealX, idealY + idealSize - cornerSize)
-                        context.stroke()
-
-                        context.font = '24px Arial'
-                        context.fillStyle = '#ffffff'
-                        context.textAlign = 'center'
-                        context.fillText(
-                            '請將臉部對準框框中心',
-                            canvas.width / 2,
-                            idealY - 20
-                        )
-
-                        if (detections.length === 1) {
-                            const detection = detections[0]
-                            const box = detection.box
-
-                            const isInPosition = (
-                                box.x > idealX &&
-                                box.y > idealY &&
-                                box.x + box.width < idealX + idealSize &&
-                                box.y + box.height < idealY + idealSize
-                            )
-
-                            context.strokeStyle = isInPosition ? '#00ff00' : '#ff0000'
-                            context.lineWidth = 2
-                            context.setLineDash([])
-                            context.strokeRect(box.x, box.y, box.width, box.height)
-
-                            setFaceDetected(isInPosition)
-                        } else {
-                            setFaceDetected(false)
-                        }
+                        const positionCheck = checkFacePosition(box, canvas.width, canvas.height)
+                        setFaceDetected(positionCheck.isInPosition)
+                    } else {
+                        setFaceDetected(false)
                     }
                 }
             } catch (error) {
@@ -319,7 +268,9 @@ export default function SettingsPage() {
 
         try {
             setIsCapturing(true)
-            const detections = await faceapi.detectAllFaces(videoRef.current, new faceapi.TinyFaceDetectorOptions())
+            const detections = await faceapi.detectAllFaces(videoRef.current, new faceapi.SsdMobilenetv1Options(
+                FACE_CONFIG.DETECTOR_OPTIONS.SSD_MOBILENET
+            ))
                 .withFaceLandmarks()
                 .withFaceDescriptors()
 

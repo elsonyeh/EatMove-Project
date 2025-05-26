@@ -1,49 +1,92 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { useParams } from 'next/navigation'
 import Link from 'next/link'
 import Image from 'next/image'
-import { ChevronLeft, Heart } from 'lucide-react'
+import { ChevronLeft, Heart, Star } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { useToast } from '@/components/ui/use-toast'
 import { useFavorites } from '@/hooks/use-favorites'
 import { useRecentViews } from '@/hooks/use-recent-views'
 import { MenuItemCard } from '@/components/menu-item-card'
-import { DishRecommender } from '@/components/dish-recommender'
-import { getRestaurantCover, getMenuItemImage } from '@/utils/image-utils'
-import { useCart } from '@/hooks/use-cart'
+import Cart, { CartRef } from '@/components/cart'
 
 export default function RestaurantPage() {
-  const { id } = useParams()
+  const params = useParams()
+  const id = Array.isArray(params?.id) ? params.id[0] : params?.id
   const { toast } = useToast()
   const { favorites, addFavorite, removeFavorite, isFavorite } = useFavorites()
   const { addRecentView } = useRecentViews()
   const [restaurant, setRestaurant] = useState<any>(null)
-  const [menu, setMenu] = useState<any[]>([])
+  const [menu, setMenu] = useState<any>({})
+  const [categories, setCategories] = useState<string[]>([])
   const [activeCategory, setActiveCategory] = useState<string>('all')
   const [loading, setLoading] = useState(true)
-  const { addItem, getTotalItems } = useCart()
+  const [userLocation, setUserLocation] = useState<{ lat: number, lng: number } | null>(null)
+  const [userAddress, setUserAddress] = useState("高雄市")
+  const cartRef = useRef<CartRef>(null)
+
+  // 獲取用戶位置
+  useEffect(() => {
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        async (position) => {
+          try {
+            const { latitude, longitude } = position.coords
+            setUserLocation({ lat: latitude, lng: longitude })
+
+            // 使用 Geocoding API 將座標轉換為地址
+            const response = await fetch(
+              `https://maps.googleapis.com/maps/api/geocode/json?latlng=${latitude},${longitude}&key=${process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY}&language=zh-TW`
+            )
+            const data = await response.json()
+            if (data.results[0]) {
+              setUserAddress(data.results[0].formatted_address)
+            }
+          } catch (error) {
+            console.error("獲取地址失敗:", error)
+          }
+        },
+        (error) => {
+          console.error("獲取位置失敗:", error)
+        }
+      )
+    }
+  }, [])
 
   useEffect(() => {
     async function fetchData() {
       try {
-        // 模擬：如果沒有 /api/restaurants，可以直接在這裡填假資料
-        const restaurantRes = await fetch(`/api/restaurants/${id}`)
+        // 構建查詢參數
+        const params = new URLSearchParams()
+        if (userLocation) {
+          params.set("lat", userLocation.lat.toString())
+          params.set("lng", userLocation.lng.toString())
+        }
+        params.set("address", userAddress)
+
+        // 獲取餐廳資訊
+        const restaurantRes = await fetch(`/api/restaurants/${id}?${params.toString()}`)
         const restaurantData = await restaurantRes.json()
 
-        const menuRes = await fetch(`/api/products?rid=${id}`)
+        // 獲取菜單資訊
+        const menuRes = await fetch(`/api/restaurants/${id}/menu`)
         const menuData = await menuRes.json()
 
         if (restaurantData.success) {
           setRestaurant(restaurantData.restaurant)
           addRecentView(restaurantData.restaurant)
+        } else {
+          console.error('❌ 餐廳資料載入失敗:', restaurantData.message)
         }
 
         if (menuData.success) {
-          setMenu(menuData.items)
+          setMenu(menuData.menu)
+          setCategories(menuData.categories)
+        } else {
+          console.error('❌ 菜單資料載入失敗:', menuData.message)
         }
 
       } catch (error) {
@@ -56,7 +99,7 @@ export default function RestaurantPage() {
     if (id) {
       fetchData()
     }
-  }, [id, addRecentView])
+  }, [id, addRecentView, userLocation, userAddress])
 
   const handleToggleFavorite = () => {
     if (!restaurant) return
@@ -76,30 +119,32 @@ export default function RestaurantPage() {
     }
   }
 
-  const addToCart = (itemId: string) => {
-    const item = menu.find((item) => item.dishid === itemId)
-    if (!item) return
+  const addToCart = (dishId: number) => {
+    // 在所有分類中尋找該菜品
+    let item = null
+    for (const category of categories) {
+      const categoryItems = menu[category] || []
+      item = categoryItems.find((menuItem: any) => menuItem.dishId === dishId)
+      if (item) break
+    }
 
-    addItem({
-      id: item.dishid,
+    if (!item || !cartRef) return
+
+    cartRef.current?.addToCart({
+      mid: item.dishId,
       name: item.name,
       price: item.price,
-      image: item.image || getMenuItemImage(item.name),
-      restaurantId: restaurant.id,
-      restaurantName: restaurant.name,
+      image: item.image || '/images/menu/default.jpg'
     })
   }
 
-  const filteredMenu =
-    activeCategory === 'all'
-      ? menu
-      : menu.filter((item) => item.category === activeCategory)
-
-  const categories =
-    menu.length > 0 ? ['all', ...new Set(menu.map((item) => item.category))] : ['all']
-
   if (loading) {
-    return <div className="p-4">載入中...</div>
+    return (
+      <div className="flex justify-center items-center py-12">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-brand-primary"></div>
+        <span className="ml-2">載入中...</span>
+      </div>
+    )
   }
 
   if (!restaurant) {
@@ -128,7 +173,7 @@ export default function RestaurantPage() {
 
       <div className="relative h-64 w-full bg-gray-300 mb-4">
         <Image
-          src={getRestaurantCover(restaurant.name) || '/placeholder.svg'}
+          src={restaurant.image || '/images/restaurants/default.jpg'}
           alt={restaurant.name}
           fill
           className="object-cover"
@@ -140,129 +185,117 @@ export default function RestaurantPage() {
               <div>
                 <h1 className="text-3xl font-bold mb-2">{restaurant.name}</h1>
                 <div className="flex items-center gap-2">
-                  <Badge variant="secondary" className="bg-white/20 text-white">
-                    {restaurant.cuisine}
-                  </Badge>
-                  <span>⭐ {restaurant.rating}</span>
+                  <div className="flex items-center">
+                    <Star className="h-4 w-4 fill-yellow-400 text-yellow-400 mr-1" />
+                    <span>{restaurant.rating}</span>
+                  </div>
+                  <span>•</span>
+                  <span>{restaurant.distance}</span>
                   <span>•</span>
                   <span>{restaurant.deliveryTime}</span>
                 </div>
               </div>
               <Button
-                variant="outline"
-                size="icon"
-                className="bg-white/10 border-white/20 text-white hover:bg-white/20 hover:text-white"
+                variant="ghost"
+                size="sm"
                 onClick={handleToggleFavorite}
+                className="text-white hover:bg-white/20"
               >
-                <Heart className={isFavorite(restaurant.id) ? 'fill-white' : ''} />
+                <Heart
+                  className={`h-5 w-5 ${isFavorite(restaurant.id) ? 'fill-red-500 text-red-500' : ''
+                    }`}
+                />
               </Button>
             </div>
           </div>
         </div>
       </div>
 
-      <div className="container py-4">
-        <Tabs
-          value={activeCategory === 'all' ? 'menu' : activeCategory}
-          onValueChange={(value) => {
-            if (value === 'menu') {
-              setActiveCategory('all')
-            } else {
-              setActiveCategory(value)
-            }
-          }}
-          className="w-full"
-        >
-          <TabsList className="grid w-full grid-cols-2 mb-6 bg-white rounded-lg overflow-hidden">
-            <TabsTrigger value="menu" className="py-4 rounded-none">
-              菜單
+      <div className="container">
+        <div className="bg-white rounded-lg shadow-sm p-6 mb-6">
+          <div className="grid grid-cols-2 gap-4 text-sm">
+            <div>
+              <span className="text-muted-foreground">最低訂購</span>
+              <p className="font-medium">${restaurant.minOrder}</p>
+            </div>
+            <div>
+              <span className="text-muted-foreground">外送費</span>
+              <p className="font-medium">${restaurant.deliveryFee}</p>
+            </div>
+          </div>
+          {restaurant.description && (
+            <div className="mt-4 pt-4 border-t">
+              <p className="text-sm text-muted-foreground">{restaurant.description}</p>
+            </div>
+          )}
+        </div>
+
+        <Tabs value={activeCategory} onValueChange={setActiveCategory} className="w-full">
+          <TabsList className="grid w-full grid-cols-auto bg-white rounded-lg p-1 mb-6">
+            <TabsTrigger value="all" className="text-sm">
+              全部
             </TabsTrigger>
-            <TabsTrigger value="info" className="py-4 rounded-none">
-              餐廳資訊
-            </TabsTrigger>
+            {categories.map((category) => (
+              <TabsTrigger key={category} value={category} className="text-sm">
+                {category}
+              </TabsTrigger>
+            ))}
           </TabsList>
 
-          <TabsContent value="menu" className="mt-0">
-            <div className="bg-white rounded-lg p-6">
-              <h2 className="text-xl font-bold mb-6">熱門餐點</h2>
-              <div className="space-y-4">
-                {filteredMenu
-                  .filter((item) => item.ispopular)
-                  .map((item, index) => (
-                    <MenuItemCard
-                      key={item.dishid}
-                      item={item}
-                      cuisine={restaurant.cuisine}
-                      index={index}
-                      onAddToCart={() => addToCart(item.dishid)}
-                    />
-                  ))}
-              </div>
-
-              {filteredMenu.filter((item) => !item.ispopular).length > 0 && (
-                <>
-                  <h2 className="text-xl font-bold mb-6 mt-8">其他餐點</h2>
-                  <div className="space-y-4">
-                    {filteredMenu
-                      .filter((item) => !item.ispopular)
-                      .map((item, index) => (
-                        <MenuItemCard
-                          key={item.dishid}
-                          item={item}
-                          cuisine={restaurant.cuisine}
-                          index={index}
-                          onAddToCart={() => addToCart(item.dishid)}
-                        />
-                      ))}
+          <TabsContent value={activeCategory} className="mt-0">
+            <div className="bg-white rounded-lg shadow-sm">
+              <div className="space-y-6">
+                {activeCategory === 'all' ? (
+                  categories.map((category) => (
+                    <div key={category}>
+                      <h3 className="text-lg font-semibold mb-4 px-6 pt-6">{category}</h3>
+                      <div className="space-y-4 px-6 pb-6">
+                        {(menu[category] || []).map((item: any, index: number) => (
+                          <MenuItemCard
+                            key={`${category}-${item.dishId}`}
+                            item={item}
+                            cuisine={restaurant.cuisine}
+                            index={index}
+                            onAddToCart={() => addToCart(item.dishId)}
+                          />
+                        ))}
+                      </div>
+                    </div>
+                  ))
+                ) : (
+                  <div className="space-y-4 p-6">
+                    {(menu[activeCategory] || []).map((item: any, index: number) => (
+                      <MenuItemCard
+                        key={`${activeCategory}-${item.dishId}`}
+                        item={item}
+                        cuisine={restaurant.cuisine}
+                        index={index}
+                        onAddToCart={() => addToCart(item.dishId)}
+                      />
+                    ))}
                   </div>
-                </>
-              )}
-            </div>
-          </TabsContent>
-
-          <TabsContent value="info" className="mt-0">
-            <div className="bg-white rounded-lg p-6">
-              <h2 className="text-xl font-bold mb-4">餐廳資訊</h2>
-              <div className="space-y-4">
-                <div className="flex justify-between py-2 border-b">
-                  <span className="text-gray-600">最低消費</span>
-                  <span className="font-medium">${restaurant.minimumOrder}</span>
-                </div>
-                <div className="flex justify-between py-2 border-b">
-                  <span className="text-gray-600">外送費</span>
-                  <span className="font-medium">${restaurant.deliveryFee}</span>
-                </div>
-                <div className="flex justify-between py-2 border-b">
-                  <span className="text-gray-600">預計送達時間</span>
-                  <span className="font-medium">{restaurant.deliveryTime}</span>
-                </div>
-                <div className="flex justify-between py-2 border-b">
-                  <span className="text-gray-600">地址</span>
-                  <span className="font-medium">{restaurant.address}</span>
-                </div>
-                <div className="flex justify-between py-2 border-b">
-                  <span className="text-gray-600">電話</span>
-                  <span className="font-medium">{restaurant.phone}</span>
-                </div>
-                <div className="pt-2">
-                  <Badge variant="outline" className="bg-gray-100">
-                    {restaurant.cuisine}
-                  </Badge>
-                </div>
+                )}
               </div>
             </div>
           </TabsContent>
         </Tabs>
       </div>
 
-      {getTotalItems() > 0 && (
-        <div className="fixed bottom-0 left-0 right-0 bg-white border-t p-4 z-50">
-          <div className="container">
-            <Button className="w-full bg-orange-500 hover:bg-orange-600" size="lg" asChild>
-              <Link href="/user/cart">查看購物車 ({getTotalItems()} 件商品)</Link>
-            </Button>
-          </div>
-        </div>
+      {/* 購物車組件 */}
+      {restaurant && (
+        <Cart
+          ref={cartRef}
+          restaurantId={restaurant.id}
+          restaurantName={restaurant.name}
+          minOrder={restaurant.minOrder || 300}
+          deliveryFee={restaurant.deliveryFee || 50}
+          onOrderSuccess={() => {
+            toast({
+              title: "訂單提交成功",
+              description: "您的訂單已成功提交，餐廳將盡快處理"
+            })
+          }}
+        />
       )}
     </div>
   )
