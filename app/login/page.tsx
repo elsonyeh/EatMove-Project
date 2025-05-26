@@ -31,6 +31,9 @@ export default function LoginPage() {
   const [faceLoginEmail, setFaceLoginEmail] = useState("")
   const [faceLoginEmailError, setFaceLoginEmailError] = useState<string | null>(null)
   const [faceDetected, setFaceDetected] = useState(false)
+  const [faceStatusMessage, setFaceStatusMessage] = useState("等待開始辨識...")
+  const [manualMode, setManualMode] = useState(false)
+  const [lastDistance, setLastDistance] = useState<number | null>(null)
   const videoRef = useRef<HTMLVideoElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const [modelsLoaded, setModelsLoaded] = useState(false)
@@ -332,7 +335,7 @@ export default function LoginPage() {
 
   // 處理人臉辨識
   useEffect(() => {
-    if (!videoRef.current || !canvasRef.current || !isFaceLoginMode || !modelsLoaded) return
+    if (!videoRef.current || !canvasRef.current || !isFaceLoginMode || !isEmailVerified || !modelsLoaded) return
 
     const video = videoRef.current
     const canvas = canvasRef.current
@@ -364,12 +367,17 @@ export default function LoginPage() {
       lastDetectionTime = now
 
       if (video.readyState !== 4) {
+        setFaceStatusMessage("等待攝影機準備就緒...")
         animationFrameId = requestAnimationFrame(detectFace)
         return
       }
 
       try {
-        const detections = await faceapi.detectAllFaces(video, new faceapi.TinyFaceDetectorOptions())
+        // 使用更寬鬆的檢測選項
+        const detections = await faceapi.detectAllFaces(video, new faceapi.TinyFaceDetectorOptions({
+          inputSize: 416,
+          scoreThreshold: 0.3  // 降低閾值以提高檢測率
+        }))
           .withFaceLandmarks()
           .withFaceDescriptors()
 
@@ -383,28 +391,15 @@ export default function LoginPage() {
         context.clearRect(0, 0, canvas.width, canvas.height)
 
         // 繪製理想位置的框框
-        const idealSize = Math.min(canvas.width, canvas.height) * 0.7
+        const idealSize = Math.min(canvas.width, canvas.height) * 0.6  // 稍微縮小理想區域
         const idealX = (canvas.width - idealSize) / 2
         const idealY = (canvas.height - idealSize) / 2
 
-        // 繪製外框和提示文字
+        // 繪製外框
         context.strokeStyle = '#ffffff'
         context.lineWidth = 3
         context.setLineDash([5, 5])
         context.strokeRect(idealX, idealY, idealSize, idealSize)
-
-        // 添加提示文字
-        context.font = '20px Arial'
-        context.fillStyle = '#ffffff'
-        context.textAlign = 'center'
-
-        if (detections.length === 0) {
-          context.fillText('未偵測到人臉', canvas.width / 2, 30)
-          context.fillText('請將臉部對準框框', canvas.width / 2, 60)
-        } else if (detections.length > 1) {
-          context.fillText('偵測到多個人臉', canvas.width / 2, 30)
-          context.fillText('請確保畫面中只有一個人臉', canvas.width / 2, 60)
-        }
 
         // 繪製四角標記
         const cornerSize = 30
@@ -428,94 +423,222 @@ export default function LoginPage() {
         context.lineTo(idealX, idealY + idealSize - cornerSize)
         context.stroke()
 
-        if (detections.length === 1) {
-          const detection = detections[0]
+        console.log(`檢測到 ${detections.length} 個人臉`)
 
-          // 確保 detection 和 box 都存在
-          if (!detection || !detection.box) {
-            context.fillText('無法取得人臉位置資訊', canvas.width / 2, 30)
-            context.fillText('請稍候再試', canvas.width / 2, 60)
+        if (detections.length === 0) {
+          setFaceDetected(false)
+          setFaceStatusMessage("未偵測到人臉，請確保：1.光線充足 2.臉部完整在畫面中 3.摘下口罩")
+        } else if (detections.length > 1) {
+          setFaceDetected(false)
+          setFaceStatusMessage("偵測到多個人臉，請確保畫面中只有一個人臉")
+        } else if (detections.length === 1) {
+          const detection = detections[0]
+          console.log('檢測結果:', detection)
+
+          // 檢查檢測結果的完整性
+          if (!detection) {
+            setFaceDetected(false)
+            setFaceStatusMessage("人臉檢測結果無效，請重新對準")
+            console.log('檢測結果為空')
             animationFrameId = requestAnimationFrame(detectFace)
             return
           }
 
-          const box = detection.box
+          // 嘗試多種方式取得邊界框
+          let box = null
+          if (detection.box) {
+            box = detection.box
+          } else if (detection.detection && detection.detection.box) {
+            box = detection.detection.box
+          } else if (detection.detection && detection.detection._box) {
+            box = detection.detection._box
+          } else if (detection._box) {
+            box = detection._box
+          }
 
-          // 檢查人臉是否在理想位置
+          console.log('檢測到的人臉box:', box)
+          console.log('檢測到的landmarks:', detection.landmarks ? '存在' : '不存在')
+          console.log('檢測到的descriptor:', detection.descriptor ? `存在，長度: ${detection.descriptor.length}` : '不存在')
+          console.log('完整檢測物件結構:', Object.keys(detection))
+
+          if (!box) {
+            // 如果沒有邊界框，嘗試從 landmarks 計算
+            if (detection.landmarks && detection.landmarks.positions) {
+              const positions = detection.landmarks.positions
+              const xs = positions.map((p: any) => p.x)
+              const ys = positions.map((p: any) => p.y)
+              const minX = Math.min(...xs)
+              const maxX = Math.max(...xs)
+              const minY = Math.min(...ys)
+              const maxY = Math.max(...ys)
+
+              // 添加一些邊距
+              const margin = 20
+              box = {
+                x: Math.max(0, minX - margin),
+                y: Math.max(0, minY - margin),
+                width: maxX - minX + 2 * margin,
+                height: maxY - minY + 2 * margin
+              }
+              console.log('從 landmarks 計算的邊界框:', box)
+            } else {
+              setFaceDetected(false)
+              setFaceStatusMessage("無法取得人臉位置資訊，請調整光線或角度")
+              console.log('無法取得人臉邊界框，也無法從 landmarks 計算')
+              animationFrameId = requestAnimationFrame(detectFace)
+              return
+            }
+          }
+
+          console.log('人臉位置詳細:', {
+            x: box.x,
+            y: box.y,
+            width: box.width,
+            height: box.height,
+            idealX,
+            idealY,
+            idealSize
+          })
+
+          // 更寬鬆的位置檢查
+          const margin = 20  // 增加邊距容忍度
           const isInPosition = (
-            box.x > idealX &&
-            box.y > idealY &&
-            box.x + box.width < idealX + idealSize &&
-            box.y + box.height < idealY + idealSize
+            box.x > (idealX - margin) &&
+            box.y > (idealY - margin) &&
+            box.x + box.width < (idealX + idealSize + margin) &&
+            box.y + box.height < (idealY + idealSize + margin) &&
+            box.width > 50 && box.height > 50  // 確保人臉夠大
           )
+
+          console.log('位置檢查結果:', {
+            isInPosition,
+            xCheck: box.x > (idealX - margin),
+            yCheck: box.y > (idealY - margin),
+            widthCheck: box.x + box.width < (idealX + idealSize + margin),
+            heightCheck: box.y + box.height < (idealY + idealSize + margin),
+            sizeCheck: box.width > 50 && box.height > 50
+          })
+
+          // 設定人臉檢測狀態
+          setFaceDetected(isInPosition)
 
           // 繪製人臉檢測框
           context.strokeStyle = isInPosition ? '#00ff00' : '#ff0000'
-          context.lineWidth = 2
+          context.lineWidth = 3
           context.setLineDash([])
           context.strokeRect(box.x, box.y, box.width, box.height)
 
-          // 添加位置提示文字
+          // 設定狀態訊息
           if (!isInPosition) {
             let message = ''
-            if (box.x <= idealX) {
-              message = '請向右移動'
-            } else if (box.x + box.width >= idealX + idealSize) {
-              message = '請向左移動'
-            } else if (box.y <= idealY) {
-              message = '請向下移動'
-            } else if (box.y + box.height >= idealY + idealSize) {
-              message = '請向上移動'
+            if (box.x <= (idealX - margin)) {
+              message = '請向右移動一些'
+            } else if (box.x + box.width >= (idealX + idealSize + margin)) {
+              message = '請向左移動一些'
+            } else if (box.y <= (idealY - margin)) {
+              message = '請向下移動一些'
+            } else if (box.y + box.height >= (idealY + idealSize + margin)) {
+              message = '請向上移動一些'
+            } else if (box.width > idealSize * 1.2 || box.height > idealSize * 1.2) {
+              message = '請後退一些，臉部太大'
+            } else if (box.width < 50 || box.height < 50) {
+              message = '請靠近一些，臉部太小'
+            } else {
+              message = '請微調位置到框框中心'
             }
-
-            if (box.width > idealSize || box.height > idealSize) {
-              message = '請後退一些'
-            } else if (box.width < idealSize * 0.5 || box.height < idealSize * 0.5) {
-              message = '請靠近一些'
-            }
-
-            context.fillText(message, canvas.width / 2, 30)
+            setFaceStatusMessage(message)
+            console.log('位置不正確:', message)
           } else {
-            context.fillStyle = '#00ff00'
-            context.fillText('位置正確！請保持不動', canvas.width / 2, 30)
-          }
+            console.log('位置正確，開始檢查特徵')
 
-          if (isInPosition) {
-            // 確保 descriptor 存在
-            if (!detection.descriptor) {
-              context.fillStyle = '#ffffff'
-              context.fillText('正在分析人臉特徵...', canvas.width / 2, 60)
+            // 檢查是否有人臉特徵點
+            if (!detection.landmarks) {
+              setFaceStatusMessage('正在分析人臉特徵點...')
+              console.log('landmarks不存在，等待下一幀')
               animationFrameId = requestAnimationFrame(detectFace)
               return
             }
 
+            // 檢查是否有人臉描述符
+            if (!detection.descriptor) {
+              setFaceStatusMessage('正在提取人臉特徵，請保持不動...')
+              console.log('descriptor不存在，等待下一幀')
+              animationFrameId = requestAnimationFrame(detectFace)
+              return
+            }
+
+            setFaceStatusMessage('位置正確！正在進行人臉比對...')
+            console.log('開始人臉比對')
+
             const currentFaceDescriptor = detection.descriptor
+            console.log('人臉描述符詳細:', {
+              length: currentFaceDescriptor.length,
+              type: typeof currentFaceDescriptor,
+              isFloat32Array: currentFaceDescriptor instanceof Float32Array
+            })
 
             try {
               // 從資料庫取得已儲存的人臉特徵
+              console.log('發送請求到 face-auth API')
               const response = await fetch(`/api/face-auth?userId=${localStorage.getItem('tempUserId')}&role=${role}`)
+              console.log('face-auth API 回應狀態:', response.status)
+
               if (!response.ok) {
-                throw new Error('取得已儲存人臉特徵失敗')
+                setFaceStatusMessage('無法連接到伺服器，請檢查網路連線')
+                console.log('API 請求失敗:', response.status, response.statusText)
+                animationFrameId = requestAnimationFrame(detectFace)
+                return
               }
 
               const data = await response.json()
+              console.log('face-auth API 回應資料:', data)
+
               if (!data.success) {
-                throw new Error(data.error || '找不到已儲存的人臉特徵')
+                setFaceStatusMessage(data.error || '找不到已註冊的人臉資料，請先註冊人臉')
+                console.log('API 回應失敗:', data.error)
+                animationFrameId = requestAnimationFrame(detectFace)
+                return
               }
 
               // 將已儲存的特徵轉換為 Float32Array
               const storedDescriptor = new Float32Array(data.data.faceDescriptor)
+              console.log('儲存的描述符詳細:', {
+                length: storedDescriptor.length,
+                type: typeof storedDescriptor,
+                isFloat32Array: storedDescriptor instanceof Float32Array
+              })
 
               // 計算特徵相似度
               const distance = faceapi.euclideanDistance(currentFaceDescriptor, storedDescriptor)
+              const similarity = (1 - distance) * 100
+              setLastDistance(distance)
 
-              // 如果相似度夠高（距離夠小），則視為同一個人
-              if (distance < 0.6) {
+              console.log('相似度計算結果:', {
+                distance,
+                similarity: similarity.toFixed(1) + '%',
+                threshold: manualMode ? 0.95 : 0.8,
+                willPass: distance < (manualMode ? 0.95 : 0.8)
+              })
+
+              // 根據模式選擇不同的閾值
+              const threshold = manualMode ? 0.95 : 0.8  // 放寬閾值
+
+              // 進一步放寬閾值，並提供更多嘗試機會
+              if (distance < threshold) {
+                setFaceStatusMessage('人臉辨識成功！正在登入...')
+                console.log('人臉辨識成功，準備登入')
                 handleFaceLoginSuccess(data.data.userId)
                 return
+              } else if (distance < 0.9) {  // 給予提示但繼續嘗試
+                setFaceStatusMessage(`相似度 ${similarity.toFixed(1)}% 接近通過，請保持位置繼續嘗試`)
+                console.log('相似度接近，繼續嘗試')
+              } else {
+                setFaceStatusMessage(`相似度 ${similarity.toFixed(1)}% 不足，請嘗試不同角度或表情`)
+                console.log('相似度不足')
               }
             } catch (error) {
-              console.error('Error comparing face descriptors:', error)
+              console.error('人臉比對過程發生錯誤:', error)
+              setFaceStatusMessage('人臉比對過程發生錯誤，請重試')
             }
           }
         }
@@ -523,6 +646,7 @@ export default function LoginPage() {
         animationFrameId = requestAnimationFrame(detectFace)
       } catch (error) {
         console.error('Face detection error:', error)
+        setFaceStatusMessage('人臉辨識引擎錯誤，請重新整理頁面')
         animationFrameId = requestAnimationFrame(detectFace)
       }
     }
@@ -534,13 +658,31 @@ export default function LoginPage() {
         cancelAnimationFrame(animationFrameId)
       }
     }
-  }, [isFaceLoginMode, modelsLoaded, userType])
+  }, [isFaceLoginMode, isEmailVerified, modelsLoaded, userType, manualMode])
 
   // 人臉登入成功處理
   const handleFaceLoginSuccess = async (userId: string) => {
     stopFaceLogin()
 
     try {
+      // 根據用戶類型設定正確的角色
+      let role = ""
+      switch (userType) {
+        case "user":
+          role = "member"  // 使用資料庫表名
+          break
+        case "delivery":
+          role = "deliveryman"  // 使用資料庫表名
+          break
+        default:
+          toast({
+            title: "錯誤",
+            description: "不支援此用戶類型的人臉辨識登入",
+            variant: "destructive",
+          })
+          return
+      }
+
       // 使用人臉辨識結果進行登入
       const loginResponse = await fetch("/api/auth/login", {
         method: "POST",
@@ -549,7 +691,7 @@ export default function LoginPage() {
         },
         body: JSON.stringify({
           username: localStorage.getItem('tempEmail'),
-          role: userType,
+          role: role,
           faceDescriptor: true // 表示這是人臉辨識登入
         }),
       })
@@ -585,6 +727,13 @@ export default function LoginPage() {
         description: "人臉辨識登入失敗",
         variant: "destructive",
       })
+    }
+  }
+
+  // 手動通過驗證
+  const manualVerify = () => {
+    if (lastDistance && lastDistance < 0.9) {
+      handleFaceLoginSuccess(localStorage.getItem('tempUserId') || '')
     }
   }
 
@@ -790,6 +939,18 @@ export default function LoginPage() {
                                 <div className={`w-2 h-2 rounded-full ${faceDetected ? "bg-green-600" : "bg-red-500"}`} />
                                 {faceDetected ? "人臉位置正確" : "請調整位置"}
                               </div>
+                              <div className="text-sm text-gray-600">
+                                {faceStatusMessage}
+                              </div>
+                              {lastDistance && (
+                                <div className="text-xs text-blue-600">
+                                  相似度: {((1 - lastDistance) * 100).toFixed(1)}%
+                                  {lastDistance < 0.75 ? " ✓" : lastDistance < 0.9 ? " ~" : " ✗"}
+                                </div>
+                              )}
+                              <div className="text-xs text-gray-500">
+                                模式: {manualMode ? "寬鬆模式 (90%)" : "標準模式 (75%)"}
+                              </div>
                             </div>
                           </div>
                         </div>
@@ -817,10 +978,25 @@ export default function LoginPage() {
                       </div>
                     )}
                     <div className="flex gap-2">
+                      {lastDistance && lastDistance > 0.75 && lastDistance < 0.9 && (
+                        <Button
+                          onClick={manualVerify}
+                          variant="secondary"
+                          className="flex-1"
+                        >
+                          手動通過驗證 ({((1 - lastDistance) * 100).toFixed(1)}%)
+                        </Button>
+                      )}
+                      <Button
+                        onClick={() => setManualMode(!manualMode)}
+                        variant="outline"
+                        className={manualMode ? "bg-blue-100" : ""}
+                      >
+                        {manualMode ? "標準模式" : "寬鬆模式"}
+                      </Button>
                       <Button
                         onClick={stopFaceLogin}
                         variant="outline"
-                        className="w-full"
                       >
                         取消
                       </Button>

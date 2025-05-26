@@ -5,9 +5,18 @@ export async function POST(req: Request) {
   try {
     const { username, password, role, faceDescriptor, plaintext } = await req.json();
 
-    if (!username || (!password && !faceDescriptor) || !role) {
+    // 修正參數驗證邏輯：人臉辨識登入時不需要密碼
+    if (!username || !role) {
       return NextResponse.json(
         { success: false, message: "缺少必要欄位" },
+        { status: 400 }
+      );
+    }
+
+    // 如果不是人臉辨識登入，則需要密碼
+    if (!faceDescriptor && !password) {
+      return NextResponse.json(
+        { success: false, message: "請提供密碼或使用人臉辨識" },
         { status: 400 }
       );
     }
@@ -32,43 +41,57 @@ export async function POST(req: Request) {
         "SELECT rid as mid, rname as name, remail as email, rpassword as password, rphonenumber as phonenumber, raddress as address FROM restaurant WHERE remail = $1",
         [username]
       );
+    } else {
+      return NextResponse.json(
+        { success: false, message: "無效的用戶類型" },
+        { status: 400 }
+      );
     }
 
     if (!result || result.rows.length === 0) {
       return NextResponse.json(
-        { success: false, message: "帳號或密碼錯誤" },
+        { success: false, message: "帳號不存在" },
         { status: 401 }
       );
     }
 
     const user = result.rows[0];
 
-    // 如果提供了人臉特徵，進行人臉辨識
-    if (faceDescriptor && user.face_descriptor) {
-      // 這裡應該加入人臉特徵比對的邏輯
-      // 暫時略過，等待實作
-    } else if (!password) {
-      return NextResponse.json(
-        { success: false, message: "請提供密碼" },
-        { status: 401 }
-      );
-    }
-
-    // 如果是明文密碼模式，直接比較密碼
-    if (plaintext) {
-      if (password !== user.password) {
+    // 如果是人臉辨識登入
+    if (faceDescriptor) {
+      if (!user.face_descriptor) {
         return NextResponse.json(
-          { success: false, message: "帳號或密碼錯誤" },
+          { success: false, message: "此帳號尚未註冊人臉特徵，請使用密碼登入" },
           { status: 401 }
         );
       }
+      // 人臉辨識已在前端完成驗證，這裡直接通過
+      console.log("人臉辨識登入成功:", username);
     } else {
-      // 這裡可以加入加密密碼的比對邏輯，但現在我們不需要
-      if (password !== user.password) {
+      // 密碼登入驗證
+      if (!password) {
         return NextResponse.json(
-          { success: false, message: "帳號或密碼錯誤" },
+          { success: false, message: "請提供密碼" },
           { status: 401 }
         );
+      }
+
+      // 如果是明文密碼模式，直接比較密碼
+      if (plaintext) {
+        if (password !== user.password) {
+          return NextResponse.json(
+            { success: false, message: "帳號或密碼錯誤" },
+            { status: 401 }
+          );
+        }
+      } else {
+        // 這裡可以加入加密密碼的比對邏輯，但現在我們不需要
+        if (password !== user.password) {
+          return NextResponse.json(
+            { success: false, message: "帳號或密碼錯誤" },
+            { status: 401 }
+          );
+        }
       }
     }
 

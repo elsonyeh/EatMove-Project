@@ -41,7 +41,8 @@ export default function RegisterPage() {
   const [faceDetected, setFaceDetected] = useState(false)
   const [isCapturing, setIsCapturing] = useState(false)
   const [captureCount, setCaptureCount] = useState(0)
-  const REQUIRED_CAPTURES = 3
+  const REQUIRED_CAPTURES = 8
+  const [faceDescriptors, setFaceDescriptors] = useState<Float32Array[]>([])
   const [phonenumber, setPhoneNumber] = useState("")
   const [passwordError, setPasswordError] = useState<string | null>(null)
   const [emailError, setEmailError] = useState<string | null>(null)
@@ -287,6 +288,124 @@ export default function RegisterPage() {
     }
   }, [isFaceRegistering, stream])
 
+  // 擷取人臉特徵
+  const captureFace = async () => {
+    if (!videoRef.current || !modelsLoaded || isCapturing) return
+
+    try {
+      setIsCapturing(true)
+
+      // 使用更寬鬆的檢測選項
+      const detections = await faceapi.detectAllFaces(
+        videoRef.current,
+        new faceapi.TinyFaceDetectorOptions({
+          inputSize: 416,
+          scoreThreshold: 0.3  // 降低閾值以提高檢測率
+        })
+      )
+        .withFaceLandmarks()
+        .withFaceDescriptors()
+
+      if (detections.length === 0) {
+        toast({
+          title: "錯誤",
+          description: "未偵測到人臉，請確保臉部在框框中且光線充足",
+          variant: "destructive",
+        })
+        return
+      }
+
+      if (detections.length > 1) {
+        toast({
+          title: "錯誤",
+          description: "偵測到多個人臉，請確保畫面中只有一個人臉",
+          variant: "destructive",
+        })
+        return
+      }
+
+      if (!faceDetected) {
+        toast({
+          title: "請調整位置",
+          description: "請將臉部對準框框中心再試一次",
+          variant: "destructive",
+        })
+        return
+      }
+
+      const detection = detections[0]
+      if (!detection.descriptor) {
+        toast({
+          title: "錯誤",
+          description: "無法提取人臉特徵，請重試",
+          variant: "destructive",
+        })
+        return
+      }
+
+      // 儲存人臉特徵
+      const newDescriptors = [...faceDescriptors, detection.descriptor]
+      setFaceDescriptors(newDescriptors)
+      setCaptureCount(prev => prev + 1)
+
+      if (captureCount + 1 >= REQUIRED_CAPTURES) {
+        // 計算平均特徵向量
+        const avgDescriptor = new Float32Array(128)  // face-api.js 的描述符長度是 128
+
+        for (let i = 0; i < 128; i++) {
+          let sum = 0
+          for (const descriptor of newDescriptors) {
+            sum += descriptor[i]
+          }
+          avgDescriptor[i] = sum / newDescriptors.length
+        }
+
+        setFaceDescriptor(avgDescriptor)
+
+        toast({
+          title: "成功",
+          description: "已完成人臉特徵擷取，使用了多張照片提高準確度",
+        })
+        stopFaceRegistration()
+      } else {
+        toast({
+          title: "繼續擷取",
+          description: `已擷取 ${captureCount + 1}/${REQUIRED_CAPTURES} 張照片，請稍微調整角度後繼續`,
+        })
+
+        // 給用戶一些時間調整位置
+        setTimeout(() => {
+          setIsCapturing(false)
+        }, 1500)
+        return
+      }
+
+    } catch (error) {
+      console.error('Error capturing face:', error)
+      toast({
+        title: "錯誤",
+        description: "擷取人臉特徵時發生錯誤",
+        variant: "destructive",
+      })
+    } finally {
+      if (captureCount + 1 < REQUIRED_CAPTURES) {
+        // 如果還沒完成所有擷取，延遲重置狀態
+        setTimeout(() => {
+          setIsCapturing(false)
+        }, 1500)
+      } else {
+        setIsCapturing(false)
+      }
+    }
+  }
+
+  // 重置人臉註冊狀態
+  const resetFaceRegistration = () => {
+    setCaptureCount(0)
+    setFaceDescriptors([])
+    setFaceDescriptor(null)
+  }
+
   // 停止註冊人臉
   const stopFaceRegistration = () => {
     if (stream) {
@@ -294,6 +413,7 @@ export default function RegisterPage() {
       setStream(null)
     }
     setIsFaceRegistering(false)
+    // 不要重置 captureCount 和 faceDescriptors，保留已擷取的資料
   }
 
   // 定期檢查人臉位置
@@ -323,7 +443,10 @@ export default function RegisterPage() {
 
         const detections = await faceapi.detectAllFaces(
           video,
-          new faceapi.TinyFaceDetectorOptions()
+          new faceapi.TinyFaceDetectorOptions({
+            inputSize: 416,
+            scoreThreshold: 0.3  // 降低閾值以提高檢測率
+          })
         )
 
         if (canvas) {
@@ -406,72 +529,6 @@ export default function RegisterPage() {
       }
     }
   }, [isFaceRegistering, modelsLoaded])
-
-  // 擷取人臉特徵
-  const captureFace = async () => {
-    if (!videoRef.current || !modelsLoaded || isCapturing) return
-
-    try {
-      setIsCapturing(true)
-      const detections = await faceapi.detectAllFaces(videoRef.current, new faceapi.TinyFaceDetectorOptions())
-        .withFaceLandmarks()
-        .withFaceDescriptors()
-
-      if (detections.length === 0) {
-        toast({
-          title: "錯誤",
-          description: "未偵測到人臉，請確保臉部在框框中",
-          variant: "destructive",
-        })
-        return
-      }
-
-      if (detections.length > 1) {
-        toast({
-          title: "錯誤",
-          description: "偵測到多個人臉，請確保畫面中只有一個人臉",
-          variant: "destructive",
-        })
-        return
-      }
-
-      if (!faceDetected) {
-        toast({
-          title: "請調整位置",
-          description: "請將臉部對準框框中心再試一次",
-          variant: "destructive",
-        })
-        return
-      }
-
-      // 儲存人臉特徵
-      setFaceDescriptor(detections[0].descriptor)
-      setCaptureCount(prev => prev + 1)
-
-      if (captureCount + 1 >= REQUIRED_CAPTURES) {
-        toast({
-          title: "成功",
-          description: "已完成人臉特徵擷取",
-        })
-        stopFaceRegistration()
-      } else {
-        toast({
-          title: "繼續擷取",
-          description: `還需要 ${REQUIRED_CAPTURES - (captureCount + 1)} 張照片`,
-        })
-      }
-
-    } catch (error) {
-      console.error('Error capturing face:', error)
-      toast({
-        title: "錯誤",
-        description: "擷取人臉特徵時發生錯誤",
-        variant: "destructive",
-      })
-    } finally {
-      setIsCapturing(false)
-    }
-  }
 
   // 檢查電子郵件格式
   const validateEmail = (email: string) => {
@@ -650,6 +707,14 @@ export default function RegisterPage() {
                             <div className="text-sm">
                               已擷取: {captureCount} / {REQUIRED_CAPTURES} 張
                             </div>
+                            {captureCount > 0 && (
+                              <button
+                                onClick={resetFaceRegistration}
+                                className="text-xs text-blue-600 hover:text-blue-800 underline"
+                              >
+                                重新開始擷取
+                              </button>
+                            )}
                           </div>
                         </div>
                       </div>
