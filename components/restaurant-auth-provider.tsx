@@ -2,17 +2,17 @@
 
 import { useState, useEffect, createContext, useContext, type ReactNode } from "react"
 import { useRouter } from "next/navigation"
-import { restaurantAccounts } from "@/lib/restaurant-accounts"
 
 // 定義店家帳號類型
 export type RestaurantAccount = {
   id: string
   username: string
-  restaurantId: string
+  restaurantId: number
   restaurantName: string
-  cuisine: string
-  description: string
-  logo: string
+  email: string
+  address?: string
+  description?: string
+  phonenumber?: string
 }
 
 // 創建認證上下文
@@ -25,7 +25,7 @@ type RestaurantAuthContextType = {
 const RestaurantAuthContext = createContext<RestaurantAuthContextType>({
   account: null,
   isLoading: true,
-  logout: () => {},
+  logout: () => { },
 })
 
 // 認證提供者組件
@@ -41,19 +41,18 @@ export function RestaurantAuthProvider({ children }: { children: ReactNode }) {
     if (storedAccount) {
       try {
         const parsedAccount = JSON.parse(storedAccount)
-        // 驗證帳號是否存在
-        const validAccount = restaurantAccounts.find((acc) => acc.id === parsedAccount.id)
-
-        if (validAccount) {
+        // 驗證必要欄位是否存在
+        if (parsedAccount.id && parsedAccount.restaurantName && parsedAccount.email) {
           setAccount(parsedAccount)
         } else {
-          // 無效帳號，清除 localStorage
+          // 資料不完整，清除 localStorage
           localStorage.removeItem("restaurantAccount")
           router.push("/login?type=restaurant")
         }
       } catch (error) {
         console.error("Failed to parse restaurant account:", error)
         localStorage.removeItem("restaurantAccount")
+        router.push("/login?type=restaurant")
       }
     } else {
       // 未登入，導向登入頁

@@ -3,7 +3,7 @@ import { pool } from "@/lib/db";
 
 export async function POST(req: Request) {
   try {
-    const { name, email, password, phonenumber, role, face_descriptor, plaintext } = await req.json();
+    const { name, email, password, phonenumber, role, face_descriptor, plaintext, account, address, description } = await req.json();
 
     if (!name || !email || !password || !phonenumber || !role) {
       return NextResponse.json(
@@ -18,6 +18,8 @@ export async function POST(req: Request) {
       checkEmailQuery = "SELECT email FROM member WHERE email = $1";
     } else if (role === "deliveryman") {
       checkEmailQuery = "SELECT demail FROM deliveryman WHERE demail = $1";
+    } else if (role === "restaurant") {
+      checkEmailQuery = "SELECT remail FROM restaurant WHERE remail = $1";
     } else {
       return NextResponse.json(
         { success: false, message: "無效的角色類型" },
@@ -57,6 +59,17 @@ export async function POST(req: Request) {
          VALUES ($1, $2, $3, $4, $5)
          RETURNING did, dname as name, demail as email, dphonenumber as phonenumber`,
         [name, email, password, phonenumber, face_descriptor]
+      );
+    } else if (role === "restaurant") {
+      // 註冊餐廳
+      // 如果沒有提供 account，使用 email 作為帳號
+      const restaurantAccount = account || email;
+      
+      result = await pool.query(
+        `INSERT INTO restaurant (account, rname, raddress, description, rphonenumber, remail, rpassword)
+         VALUES ($1, $2, $3, $4, $5, $6, $7)
+         RETURNING rid, account, rname as name, remail as email, rphonenumber as phonenumber, raddress as address, description`,
+        [restaurantAccount, name, address || "暫時地址", description || "暫無描述", phonenumber, email, password]
       );
     }
 

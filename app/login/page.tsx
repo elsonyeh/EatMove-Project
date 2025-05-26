@@ -11,7 +11,6 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { useToast } from "@/components/ui/use-toast"
 import { BrandLogo } from "@/components/brand-logo"
-import { restaurantAccounts } from "@/lib/restaurant-accounts"
 import Script from 'next/script'
 
 // 移除 face-api.js 的直接引入
@@ -770,21 +769,54 @@ export default function LoginPage() {
 
     try {
       if (userType === "restaurant") {
-        // 檢查餐廳帳號密碼
-        const account = restaurantAccounts.find(
-          (account) => account.username === username && account.password === password,
-        )
-
-        if (account) {
-          localStorage.setItem("restaurantAccount", JSON.stringify(account))
-          toast({
-            title: "登入成功",
-            description: `歡迎回來，${account.restaurantName}`,
+        // 使用 API 進行餐廳登入
+        try {
+          const response = await fetch("/api/auth/login", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              username,
+              password,
+              role: "restaurant",
+              plaintext: true
+            }),
           })
-          router.push("/restaurant/dashboard")
-          return
-        } else {
-          setError("帳號或密碼錯誤")
+
+          if (!response.ok) {
+            const errorData = await response.json()
+            throw new Error(errorData.message || "登入失敗")
+          }
+
+          const data = await response.json()
+
+          if (data.success) {
+            // 儲存餐廳資訊到 localStorage
+            const restaurantData = {
+              id: data.data.mid.toString(),
+              username: data.data.email,
+              restaurantId: data.data.mid,
+              restaurantName: data.data.name,
+              email: data.data.email,
+              address: data.data.address,
+              description: data.data.description || "暫無描述",
+              phonenumber: data.data.phonenumber
+            }
+            localStorage.setItem("restaurantAccount", JSON.stringify(restaurantData))
+
+            toast({
+              title: "登入成功",
+              description: `歡迎回來，${data.data.name}`,
+            })
+            router.push("/restaurant/dashboard")
+            return
+          } else {
+            setError(data.message || "帳號或密碼錯誤")
+          }
+        } catch (error: any) {
+          console.error("餐廳登入失敗:", error)
+          setError(error.message || "登入時發生錯誤，請稍後再試")
         }
       } else {
         try {

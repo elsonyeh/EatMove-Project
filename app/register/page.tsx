@@ -46,6 +46,8 @@ export default function RegisterPage() {
   const [phonenumber, setPhoneNumber] = useState("")
   const [passwordError, setPasswordError] = useState<string | null>(null)
   const [emailError, setEmailError] = useState<string | null>(null)
+  const [address, setAddress] = useState("")
+  const [description, setDescription] = useState("")
 
   // 設定 canvas 的 willReadFrequently 屬性
   useEffect(() => {
@@ -595,9 +597,11 @@ export default function RegisterPage() {
         email,
         password,
         phonenumber,
-        role: userType === "user" ? "member" : "deliveryman",
+        role: userType === "user" ? "member" : userType === "delivery" ? "deliveryman" : "restaurant",
         face_descriptor: faceDescriptor ? Array.from(faceDescriptor) : null,
-        plaintext: true // 添加明文密碼標記
+        plaintext: true, // 添加明文密碼標記
+        address,
+        description
       }
 
       // 發送註冊請求
@@ -809,6 +813,28 @@ export default function RegisterPage() {
                         onChange={(e) => setPhoneNumber(e.target.value)}
                       />
                     </div>
+                    {userType === "restaurant" && (
+                      <>
+                        <div className="space-y-2">
+                          <Label htmlFor="address">餐廳地址</Label>
+                          <Input
+                            id="address"
+                            placeholder="請輸入餐廳地址"
+                            value={address}
+                            onChange={(e) => setAddress(e.target.value)}
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="description">餐廳描述</Label>
+                          <Input
+                            id="description"
+                            placeholder="請輸入餐廳描述"
+                            value={description}
+                            onChange={(e) => setDescription(e.target.value)}
+                          />
+                        </div>
+                      </>
+                    )}
                     <div className="space-y-2">
                       <Label htmlFor="password">密碼</Label>
                       <Input

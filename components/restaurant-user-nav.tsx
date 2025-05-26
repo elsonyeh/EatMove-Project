@@ -37,7 +37,7 @@ export function RestaurantUserNav() {
       <DropdownMenuTrigger asChild>
         <Button variant="ghost" className="relative h-10 w-10 rounded-full">
           <Avatar className="h-10 w-10 border-2 border-brand-primary/20">
-            <AvatarImage src={account.logo || "/placeholder.svg"} alt={account.restaurantName} />
+            <AvatarImage src="/placeholder.svg" alt={account.restaurantName} />
             <AvatarFallback className="bg-brand-primary/10 text-brand-primary">
               {account.restaurantName.charAt(0)}
             </AvatarFallback>
@@ -48,7 +48,7 @@ export function RestaurantUserNav() {
         <DropdownMenuLabel className="font-normal">
           <div className="flex flex-col space-y-1">
             <p className="text-sm font-medium leading-none">{account.restaurantName}</p>
-            <p className="text-xs leading-none text-muted-foreground">{account.cuisine}</p>
+            <p className="text-xs leading-none text-muted-foreground">{account.email}</p>
           </div>
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
