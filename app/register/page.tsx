@@ -41,7 +41,7 @@ export default function RegisterPage() {
   const [faceDetected, setFaceDetected] = useState(false)
   const [isCapturing, setIsCapturing] = useState(false)
   const [captureCount, setCaptureCount] = useState(0)
-  const REQUIRED_CAPTURES = 8
+  const REQUIRED_CAPTURES = 5
   const [faceDescriptors, setFaceDescriptors] = useState<Float32Array[]>([])
   const [phonenumber, setPhoneNumber] = useState("")
   const [passwordError, setPasswordError] = useState<string | null>(null)

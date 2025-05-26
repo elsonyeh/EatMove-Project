@@ -32,7 +32,6 @@ export default function LoginPage() {
   const [faceLoginEmailError, setFaceLoginEmailError] = useState<string | null>(null)
   const [faceDetected, setFaceDetected] = useState(false)
   const [faceStatusMessage, setFaceStatusMessage] = useState("等待開始辨識...")
-  const [manualMode, setManualMode] = useState(false)
   const [lastDistance, setLastDistance] = useState<number | null>(null)
   const videoRef = useRef<HTMLVideoElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
@@ -616,15 +615,12 @@ export default function LoginPage() {
               console.log('相似度計算結果:', {
                 distance,
                 similarity: similarity.toFixed(1) + '%',
-                threshold: manualMode ? 0.95 : 0.8,
-                willPass: distance < (manualMode ? 0.95 : 0.8)
+                threshold: 0.75,
+                willPass: distance < 0.75
               })
 
-              // 根據模式選擇不同的閾值
-              const threshold = manualMode ? 0.95 : 0.8  // 放寬閾值
-
               // 進一步放寬閾值，並提供更多嘗試機會
-              if (distance < threshold) {
+              if (distance < 0.75) {
                 setFaceStatusMessage('人臉辨識成功！正在登入...')
                 console.log('人臉辨識成功，準備登入')
                 handleFaceLoginSuccess(data.data.userId)
@@ -658,13 +654,24 @@ export default function LoginPage() {
         cancelAnimationFrame(animationFrameId)
       }
     }
-  }, [isFaceLoginMode, isEmailVerified, modelsLoaded, userType, manualMode])
+  }, [isFaceLoginMode, isEmailVerified, modelsLoaded, userType])
 
   // 人臉登入成功處理
   const handleFaceLoginSuccess = async (userId: string) => {
-    stopFaceLogin()
-
     try {
+      // 先取得 tempEmail，避免被 stopFaceLogin 清除
+      const tempEmail = localStorage.getItem('tempEmail')
+
+      if (!tempEmail) {
+        toast({
+          title: "錯誤",
+          description: "無法取得用戶電子郵件，請重新開始人臉辨識",
+          variant: "destructive",
+        })
+        stopFaceLogin()
+        return
+      }
+
       // 根據用戶類型設定正確的角色
       let role = ""
       switch (userType) {
@@ -680,25 +687,36 @@ export default function LoginPage() {
             description: "不支援此用戶類型的人臉辨識登入",
             variant: "destructive",
           })
+          stopFaceLogin()
           return
       }
 
       // 使用人臉辨識結果進行登入
+      const requestData = {
+        username: tempEmail,
+        role: role,
+        faceDescriptor: true // 表示這是人臉辨識登入
+      }
+
+      console.log("=== 前端發送登入請求 ===");
+      console.log("requestData:", requestData);
+      console.log("tempEmail from localStorage:", tempEmail);
+      console.log("========================");
+
       const loginResponse = await fetch("/api/auth/login", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({
-          username: localStorage.getItem('tempEmail'),
-          role: role,
-          faceDescriptor: true // 表示這是人臉辨識登入
-        }),
+        body: JSON.stringify(requestData),
       })
 
       const loginData = await loginResponse.json()
 
       if (loginData.success) {
+        // 登入成功後才清理資源
+        stopFaceLogin()
+
         localStorage.setItem("userId", loginData.data.mid)
         localStorage.removeItem('tempUserId')
         localStorage.removeItem('tempEmail')
@@ -719,6 +737,7 @@ export default function LoginPage() {
           description: loginData.message || "人臉辨識登入失敗",
           variant: "destructive",
         })
+        // 登入失敗時不清理資源，讓用戶可以重試
       }
     } catch (error) {
       console.error('人臉登入失敗:', error)
@@ -727,13 +746,7 @@ export default function LoginPage() {
         description: "人臉辨識登入失敗",
         variant: "destructive",
       })
-    }
-  }
-
-  // 手動通過驗證
-  const manualVerify = () => {
-    if (lastDistance && lastDistance < 0.9) {
-      handleFaceLoginSuccess(localStorage.getItem('tempUserId') || '')
+      // 發生錯誤時不清理資源，讓用戶可以重試
     }
   }
 
@@ -948,9 +961,6 @@ export default function LoginPage() {
                                   {lastDistance < 0.75 ? " ✓" : lastDistance < 0.9 ? " ~" : " ✗"}
                                 </div>
                               )}
-                              <div className="text-xs text-gray-500">
-                                模式: {manualMode ? "寬鬆模式 (90%)" : "標準模式 (75%)"}
-                              </div>
                             </div>
                           </div>
                         </div>
@@ -978,22 +988,6 @@ export default function LoginPage() {
                       </div>
                     )}
                     <div className="flex gap-2">
-                      {lastDistance && lastDistance > 0.75 && lastDistance < 0.9 && (
-                        <Button
-                          onClick={manualVerify}
-                          variant="secondary"
-                          className="flex-1"
-                        >
-                          手動通過驗證 ({((1 - lastDistance) * 100).toFixed(1)}%)
-                        </Button>
-                      )}
-                      <Button
-                        onClick={() => setManualMode(!manualMode)}
-                        variant="outline"
-                        className={manualMode ? "bg-blue-100" : ""}
-                      >
-                        {manualMode ? "標準模式" : "寬鬆模式"}
-                      </Button>
                       <Button
                         onClick={stopFaceLogin}
                         variant="outline"
