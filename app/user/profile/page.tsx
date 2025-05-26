@@ -1,8 +1,7 @@
 "use client"
 
 import type React from "react"
-
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -10,19 +9,64 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { useToast } from "@/components/ui/use-toast"
-import { User, Mail, Phone, MapPin, Camera } from "lucide-react"
+import { User, Mail, Phone, MapPin, Camera, Wallet } from "lucide-react"
 
 export default function UserProfilePage() {
   const { toast } = useToast()
   const [userData, setUserData] = useState({
-    username: "User001",
-    email: "user001@example.com",
-    phone: "0912345678",
-    address: "台北市信義區信義路五段7號",
-    avatar: "/placeholder.svg?height=128&width=128&text=User001",
+    mid: "",
+    name: "",
+    email: "",
+    phonenumber: "",
+    address: "",
+    wallet: 0,
+    avatar: "/placeholder.svg?height=128&width=128"
   })
 
   const [formData, setFormData] = useState({ ...userData })
+  const [loading, setLoading] = useState(true)
+
+  // 從 localStorage 獲取用戶 ID
+  useEffect(() => {
+    const fetchUserData = async () => {
+      try {
+        const mid = localStorage.getItem("userId")
+        if (!mid) {
+          toast({
+            title: "錯誤",
+            description: "請先登入",
+            variant: "destructive",
+          })
+          return
+        }
+
+        const response = await fetch(`/api/user/profile?mid=${mid}`)
+        const data = await response.json()
+
+        if (data.success) {
+          const userInfo = data.data
+          setUserData(userInfo)
+          setFormData(userInfo)
+          setLoading(false)
+        } else {
+          toast({
+            title: "錯誤",
+            description: data.message,
+            variant: "destructive",
+          })
+        }
+      } catch (error) {
+        console.error("獲取用戶資料失敗:", error)
+        toast({
+          title: "錯誤",
+          description: "獲取用戶資料失敗",
+          variant: "destructive",
+        })
+      }
+    }
+
+    fetchUserData()
+  }, [toast])
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target
@@ -32,15 +76,48 @@ export default function UserProfilePage() {
     })
   }
 
-  const handleSaveProfile = (e: React.FormEvent) => {
+  const handleSaveProfile = async (e: React.FormEvent) => {
     e.preventDefault()
-    setUserData({ ...formData })
+    try {
+      const response = await fetch("/api/user/profile", {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          ...formData,
+          mid: userData.mid,
+        }),
+      })
 
-    toast({
-      title: "個人資料已更新",
-      description: "您的個人資料已成功儲存",
-      variant: "default",
-    })
+      const data = await response.json()
+
+      if (data.success) {
+        setUserData(data.data)
+        toast({
+          title: "成功",
+          description: "個人資料已更新",
+          variant: "default",
+        })
+      } else {
+        toast({
+          title: "錯誤",
+          description: data.message,
+          variant: "destructive",
+        })
+      }
+    } catch (error) {
+      console.error("更新用戶資料失敗:", error)
+      toast({
+        title: "錯誤",
+        description: "更新用戶資料失敗",
+        variant: "destructive",
+      })
+    }
+  }
+
+  if (loading) {
+    return <div className="container py-8">載入中...</div>
   }
 
   return (
@@ -57,9 +134,9 @@ export default function UserProfilePage() {
               <div className="flex flex-col items-center">
                 <div className="relative mb-4">
                   <Avatar className="h-32 w-32 border-4 border-brand-primary/20">
-                    <AvatarImage src={userData.avatar || "/placeholder.svg"} alt={userData.username} />
+                    <AvatarImage src={userData.avatar} alt={userData.name} />
                     <AvatarFallback className="text-3xl bg-brand-primary/10 text-brand-primary">
-                      {userData.username.charAt(0).toUpperCase()}
+                      {userData.name?.charAt(0).toUpperCase()}
                     </AvatarFallback>
                   </Avatar>
                   <Button size="icon" variant="secondary" className="absolute bottom-0 right-0 h-8 w-8 rounded-full">
@@ -67,7 +144,7 @@ export default function UserProfilePage() {
                     <span className="sr-only">更換頭像</span>
                   </Button>
                 </div>
-                <h2 className="text-xl font-bold">{userData.username}</h2>
+                <h2 className="text-xl font-bold">{userData.name}</h2>
                 <p className="text-sm text-muted-foreground">{userData.email}</p>
                 <div className="mt-4 w-full">
                   <div className="flex items-center py-2 border-t">
@@ -76,11 +153,15 @@ export default function UserProfilePage() {
                   </div>
                   <div className="flex items-center py-2 border-t">
                     <Phone className="h-4 w-4 mr-2 text-muted-foreground" />
-                    <span className="text-sm">{userData.phone}</span>
+                    <span className="text-sm">{userData.phonenumber}</span>
                   </div>
                   <div className="flex items-center py-2 border-t">
                     <MapPin className="h-4 w-4 mr-2 text-muted-foreground" />
                     <span className="text-sm">{userData.address}</span>
+                  </div>
+                  <div className="flex items-center py-2 border-t">
+                    <Wallet className="h-4 w-4 mr-2 text-muted-foreground" />
+                    <span className="text-sm">錢包餘額: ${userData.wallet}</span>
                   </div>
                 </div>
               </div>
@@ -105,14 +186,14 @@ export default function UserProfilePage() {
                   <form onSubmit={handleSaveProfile}>
                     <div className="grid gap-4">
                       <div className="grid gap-2">
-                        <Label htmlFor="username">用戶名稱</Label>
+                        <Label htmlFor="name">用戶名稱</Label>
                         <div className="relative">
                           <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                           <Input
-                            id="username"
-                            name="username"
+                            id="name"
+                            name="name"
                             className="pl-10"
-                            value={formData.username}
+                            value={formData.name}
                             onChange={handleInputChange}
                           />
                         </div>
@@ -132,14 +213,14 @@ export default function UserProfilePage() {
                         </div>
                       </div>
                       <div className="grid gap-2">
-                        <Label htmlFor="phone">電話號碼</Label>
+                        <Label htmlFor="phonenumber">電話號碼</Label>
                         <div className="relative">
                           <Phone className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                           <Input
-                            id="phone"
-                            name="phone"
+                            id="phonenumber"
+                            name="phonenumber"
                             className="pl-10"
-                            value={formData.phone}
+                            value={formData.phonenumber}
                             onChange={handleInputChange}
                           />
                         </div>

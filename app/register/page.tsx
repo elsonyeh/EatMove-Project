@@ -42,6 +42,7 @@ export default function RegisterPage() {
   const [isCapturing, setIsCapturing] = useState(false)
   const [captureCount, setCaptureCount] = useState(0)
   const REQUIRED_CAPTURES = 3
+  const [phonenumber, setPhoneNumber] = useState("")
 
   // 載入人臉辨識模型
   useEffect(() => {
@@ -423,7 +424,7 @@ export default function RegisterPage() {
       name: username,
       email,
       password,
-      phonenumber: "0912345678",
+      phonenumber,
       address: "暫時地址",
       description: "暫時描述",
     }
@@ -596,6 +597,16 @@ export default function RegisterPage() {
                         placeholder="請輸入電子郵件"
                         value={email}
                         onChange={(e) => setEmail(e.target.value)}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="phonenumber">電話號碼</Label>
+                      <Input
+                        id="phonenumber"
+                        type="tel"
+                        placeholder="請輸入電話號碼"
+                        value={phonenumber}
+                        onChange={(e) => setPhoneNumber(e.target.value)}
                       />
                     </div>
                     <div className="space-y-2">

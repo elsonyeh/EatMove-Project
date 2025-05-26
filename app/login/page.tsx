@@ -227,16 +227,41 @@ export default function LoginPage() {
         }
       } else {
         // 處理用戶或外送員登入
-        toast({
-          title: "登入成功",
-          description: "歡迎回來！",
-        })
+        try {
+          const response = await fetch("/api/auth/login", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              username,
+              password,
+              role: userType
+            }),
+          });
 
-        // 根據用戶類型導向不同頁面
-        if (userType === "user") {
-          router.push("/user/home")
-        } else if (userType === "delivery") {
-          router.push("/delivery/dashboard")
+          const data = await response.json();
+
+          if (data.success) {
+            localStorage.setItem("userId", data.data.mid);
+
+            toast({
+              title: "登入成功",
+              description: `歡迎回來，${data.data.name}！`,
+            });
+
+            // 根據用戶類型導向不同頁面
+            if (userType === "user") {
+              router.push("/user/home");
+            } else if (userType === "delivery") {
+              router.push("/delivery/dashboard");
+            }
+          } else {
+            setError(data.message || "帳號或密碼錯誤");
+          }
+        } catch (error) {
+          console.error("登入失敗:", error);
+          setError("登入時發生錯誤，請稍後再試");
         }
       }
     } catch (error) {
@@ -309,10 +334,11 @@ export default function LoginPage() {
                   <form onSubmit={handleLogin} className="space-y-4">
                     {error && <div className="p-3 text-sm text-red-500 bg-red-50 rounded-md">{error}</div>}
                     <div className="space-y-2">
-                      <Label htmlFor="username">帳號</Label>
+                      <Label htmlFor="username">電子郵件</Label>
                       <Input
                         id="username"
-                        placeholder="請輸入帳號"
+                        type="email"
+                        placeholder="請輸入電子郵件"
                         value={username}
                         onChange={(e) => setUsername(e.target.value)}
                       />

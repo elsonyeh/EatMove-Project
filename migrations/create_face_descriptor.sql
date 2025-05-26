@@ -1,0 +1,9 @@
+-- 建立人臉特徵表格
+CREATE TABLE IF NOT EXISTS "FaceDescriptor" (
+    "id" SERIAL PRIMARY KEY,
+    "memberId" VARCHAR NOT NULL UNIQUE,
+    "descriptor" FLOAT[] NOT NULL,
+    "createdAt" TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY ("memberId") REFERENCES "member"("mid")
+); 

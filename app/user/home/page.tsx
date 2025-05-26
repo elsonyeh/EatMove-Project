@@ -1,32 +1,20 @@
 "use client"
 
-import { useState, useEffect } from "react"
-import { RestaurantCard } from "@/components/restaurant-card"
-import { restaurants } from "@/lib/data"
+import { useEffect, useState } from "react"
+import { useRouter, useSearchParams } from "next/navigation"
+import { Search, MapPin, Clock, Sparkles, TrendingUp, Award, ArrowRight } from "lucide-react"
 import { SearchBar } from "@/components/search-bar"
 import { CategoryFilter } from "@/components/category-filter"
+import { RestaurantCard } from "@/components/restaurant-card"
 import { useFavorites } from "@/hooks/use-favorites"
-import { Skeleton } from "@/components/ui/skeleton"
-import { ArrowRight, TrendingUp, Award, Zap, MapPin, Sparkles, Clock, Search } from "lucide-react"
-import { useSearchParams, useRouter } from "next/navigation"
-
-// 類別ID到名稱的映射
-const categoryMap: Record<string, string> = {
-  all: "全部",
-  chinese: "中式料理",
-  japanese: "日式料理",
-  korean: "韓式料理",
-  italian: "義式料理",
-  american: "美式料理",
-  thai: "泰式料理",
-  vegetarian: "素食",
-  dessert: "甜點",
-  beverage: "飲料",
-}
+import { categoryMap } from "@/config/categories"
+import { restaurants } from "@/config/restaurants"
+import { useToast } from "@/components/ui/use-toast"
 
 export default function UserHomePage() {
   const router = useRouter()
   const searchParams = useSearchParams()
+  const { toast } = useToast()
   const initialQuery = searchParams.get("q") || ""
   const initialCategory = searchParams.get("category") || "all"
 
@@ -34,10 +22,93 @@ export default function UserHomePage() {
   const [activeCategoryName, setActiveCategoryName] = useState(categoryMap[initialCategory] || "全部")
   const [loading, setLoading] = useState(true)
   const [searchQuery, setSearchQuery] = useState(initialQuery)
-  const [searchLocation, setSearchLocation] = useState("台北市信義區")
+  const [searchLocation, setSearchLocation] = useState("")
   const [filteredRestaurants, setFilteredRestaurants] = useState(restaurants)
   const [isSearching, setIsSearching] = useState(false)
   const { favorites } = useFavorites()
+  const [userData, setUserData] = useState({
+    name: "",
+    address: "",
+    wallet: 0
+  })
+  const [estimatedTime, setEstimatedTime] = useState("20-35")
+
+  // 從 localStorage 獲取用戶 ID 並讀取用戶資料
+  useEffect(() => {
+    const fetchUserData = async () => {
+      try {
+        const mid = localStorage.getItem("userId")
+        if (!mid) {
+          toast({
+            title: "錯誤",
+            description: "請先登入",
+            variant: "destructive",
+          })
+          return
+        }
+
+        const response = await fetch(`/api/user/profile?mid=${mid}`)
+        const data = await response.json()
+
+        if (data.success) {
+          setUserData(data.data)
+          setSearchLocation(data.data.address || "台北市信義區")
+        }
+      } catch (error) {
+        console.error("獲取用戶資料失敗:", error)
+      }
+    }
+
+    fetchUserData()
+  }, [toast])
+
+  // 獲取用戶當前位置
+  useEffect(() => {
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        async (position) => {
+          try {
+            const { latitude, longitude } = position.coords
+            // 使用 Geocoding API 將座標轉換為地址
+            const response = await fetch(
+              `https://maps.googleapis.com/maps/api/geocode/json?latlng=${latitude},${longitude}&key=${process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY}&language=zh-TW`
+            )
+            const data = await response.json()
+            if (data.results[0]) {
+              setSearchLocation(data.results[0].formatted_address)
+            }
+          } catch (error) {
+            console.error("獲取地址失敗:", error)
+          }
+        },
+        (error) => {
+          console.error("獲取位置失敗:", error)
+        }
+      )
+    }
+  }, [])
+
+  // 計算預估送達時間
+  const calculateEstimatedTime = (location: string) => {
+    // 這裡可以根據不同地區設定不同的預估時間
+    const timeMap: { [key: string]: string } = {
+      "信義區": "20-35",
+      "大安區": "25-40",
+      "中山區": "30-45",
+      "松山區": "25-40",
+      "內湖區": "35-50",
+      // 可以添加更多地區
+    }
+
+    // 檢查地址中是否包含特定區域
+    for (const [district, time] of Object.entries(timeMap)) {
+      if (location.includes(district)) {
+        return time
+      }
+    }
+
+    return "30-45" // 預設時間
+  }
 
   // 過濾餐廳的函數
   const filterRestaurants = (query: string, category: string) => {
@@ -62,15 +133,12 @@ export default function UserHomePage() {
 
     setFilteredRestaurants(results)
 
-    // 更新URL參數，但不進行頁面跳轉
+    // 更新URL參數
     const params = new URLSearchParams(searchParams.toString())
     if (query) params.set("q", query)
     else params.delete("q")
-
     if (category !== "all") params.set("category", category)
     else params.delete("category")
-
-    // 使用 router.replace 而不是 router.push 來避免頁面重新加載
     router.replace(`/user/home${params.toString() ? `?${params.toString()}` : ""}`, { scroll: false })
 
     setTimeout(() => setIsSearching(false), 300)
@@ -80,6 +148,7 @@ export default function UserHomePage() {
   const handleSearch = (query: string, location: string) => {
     setSearchQuery(query)
     setSearchLocation(location)
+    setEstimatedTime(calculateEstimatedTime(location))
     filterRestaurants(query, activeCategory)
   }
 
@@ -106,7 +175,7 @@ export default function UserHomePage() {
         <div className="container">
           <div className="max-w-3xl">
             <h1 className="text-4xl md:text-5xl font-bold mb-4">
-              <span>User001</span>
+              <span>{userData.name || "訪客"}</span>
               <span className="mx-2">，</span>
               <span>歡迎回來！</span>
             </h1>
@@ -140,7 +209,7 @@ export default function UserHomePage() {
             </div>
             <div>
               <h3 className="font-medium">預計送達時間</h3>
-              <p className="text-sm text-muted-foreground">20-35 分鐘</p>
+              <p className="text-sm text-muted-foreground">{estimatedTime} 分鐘</p>
             </div>
           </div>
 
@@ -150,7 +219,7 @@ export default function UserHomePage() {
             </div>
             <div>
               <h3 className="font-medium">EatMove 點數</h3>
-              <p className="text-sm text-muted-foreground">320 點</p>
+              <p className="text-sm text-muted-foreground">{userData.wallet || 0} 點</p>
             </div>
           </div>
         </div>
@@ -195,46 +264,15 @@ export default function UserHomePage() {
           </div>
 
           {/* 餐廳列表渲染 */}
-          {loading || isSearching ? (
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
-              {Array(8)
-                .fill(0)
-                .map((_, i) => (
-                  <div key={i} className="rounded-xl overflow-hidden">
-                    <Skeleton className="h-48 w-full" />
-                    <div className="p-4 space-y-3">
-                      <Skeleton className="h-6 w-3/4" />
-                      <Skeleton className="h-4 w-full" />
-                      <div className="flex gap-2">
-                        <Skeleton className="h-4 w-1/4" />
-                        <Skeleton className="h-4 w-1/4" />
-                      </div>
-                    </div>
-                  </div>
-                ))}
-            </div>
-          ) : filteredRestaurants.length > 0 ? (
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
-              {filteredRestaurants.map((restaurant) => (
-                <div key={restaurant.id} className="h-full">
-                  <RestaurantCard
-                    restaurant={restaurant}
-                    isFavorite={favorites.some((fav) => fav.id === restaurant.id)}
-                  />
-                </div>
-              ))}
-            </div>
-          ) : (
-            <div className="text-center py-12 bg-muted/30 rounded-xl">
-              <Zap className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-              <h3 className="text-xl font-medium mb-2">
-                {searchQuery ? `找不到與 "${searchQuery}" 相關的餐廳` : `暫無${activeCategoryName}店家`}
-              </h3>
-              <p className="text-muted-foreground mb-4">
-                {searchQuery ? "請嘗試其他搜尋關鍵字" : "請嘗試選擇其他類別"}
-              </p>
-            </div>
-          )}
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
+            {filteredRestaurants.map((restaurant) => (
+              <RestaurantCard
+                key={restaurant.id}
+                restaurant={restaurant}
+                isFavorite={favorites.some((fav) => fav.id === restaurant.id)}
+              />
+            ))}
+          </div>
         </div>
       </div>
     </div>
