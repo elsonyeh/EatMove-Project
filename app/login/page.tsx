@@ -26,6 +26,11 @@ export default function LoginPage() {
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState("")
   const [isFaceLoginMode, setIsFaceLoginMode] = useState(false)
+  const [isEmailVerified, setIsEmailVerified] = useState(false)
+  const [verifyingEmail, setVerifyingEmail] = useState(false)
+  const [faceLoginEmail, setFaceLoginEmail] = useState("")
+  const [faceLoginEmailError, setFaceLoginEmailError] = useState<string | null>(null)
+  const [faceDetected, setFaceDetected] = useState(false)
   const videoRef = useRef<HTMLVideoElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const [modelsLoaded, setModelsLoaded] = useState(false)
@@ -67,30 +72,245 @@ export default function LoginPage() {
     }
   }, [stream])
 
+  // 驗證電子郵件格式
+  const validateFaceLoginEmail = (email: string) => {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+    if (!email) {
+      setFaceLoginEmailError("請輸入電子郵件")
+      return false
+    }
+    if (!emailRegex.test(email)) {
+      setFaceLoginEmailError("請輸入有效的電子郵件地址")
+      return false
+    }
+    setFaceLoginEmailError(null)
+    return true
+  }
+
   // 開始人臉登入
   const startFaceLogin = async () => {
-    if (!modelsLoaded) {
-      toast({
-        title: "請稍候",
-        description: "人臉辨識模型正在載入中",
-      })
+    setIsFaceLoginMode(true)
+  }
+
+  // 驗證電子郵件
+  const verifyEmail = async () => {
+    if (!validateFaceLoginEmail(faceLoginEmail)) {
       return
     }
 
+    setVerifyingEmail(true)
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ video: {} })
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream
-        setStream(stream)
+      // 根據用戶類型設定正確的角色
+      let role = ""
+      switch (userType) {
+        case "user":
+          role = "member"  // 使用資料庫表名
+          break
+        case "delivery":
+          role = "deliveryman"  // 使用資料庫表名
+          break
+        default:
+          setFaceLoginEmailError("不支援此用戶類型的人臉辨識登入")
+          setVerifyingEmail(false)
+          return
       }
-      setIsFaceLoginMode(true)
-    } catch (error) {
-      console.error('Error accessing camera:', error)
-      toast({
-        title: "錯誤",
-        description: "無法存取攝影機",
-        variant: "destructive",
+
+      console.log('發送請求:', {
+        email: faceLoginEmail,
+        role,
+        userType
       })
+
+      const checkResponse = await fetch("/api/auth/check-user", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          email: faceLoginEmail,
+          role
+        }),
+      })
+
+      const checkData = await checkResponse.json()
+      if (!checkData.success) {
+        setFaceLoginEmailError(checkData.message || "找不到此用戶")
+        return
+      }
+
+      // 儲存臨時資訊
+      localStorage.setItem('tempUserId', checkData.data.id)
+      localStorage.setItem('tempEmail', faceLoginEmail)
+      setIsEmailVerified(true)
+
+      // 等待 React 渲染完成
+      await new Promise(resolve => setTimeout(resolve, 100))
+
+      // 開啟攝影機
+      try {
+        // 確保影片元素已經準備好
+        if (!videoRef.current) {
+          throw new Error('影片元素未準備就緒')
+        }
+
+        // 先停止現有的串流（如果有的話）
+        if (stream) {
+          stream.getTracks().forEach(track => track.stop())
+          setStream(null)
+        }
+
+        // 嘗試多種攝影機設定
+        const cameraConfigs = [
+          {
+            video: {
+              width: { ideal: 640 },
+              height: { ideal: 480 },
+              facingMode: "user"
+            }
+          },
+          {
+            video: {
+              width: { ideal: 1280 },
+              height: { ideal: 720 },
+              facingMode: "user"
+            }
+          },
+          {
+            video: true
+          }
+        ]
+
+        let newStream: MediaStream | null = null
+        let lastError = null
+
+        for (const config of cameraConfigs) {
+          try {
+            console.log('嘗試攝影機設定:', config)
+            const result = await Promise.race([
+              navigator.mediaDevices.getUserMedia(config),
+              new Promise<never>((_, reject) =>
+                setTimeout(() => reject(new Error('攝影機啟動超時')), 10000)
+              )
+            ])
+            newStream = result as MediaStream
+            break // 成功則跳出迴圈
+          } catch (error) {
+            console.warn('攝影機設定失敗:', config, error)
+            lastError = error
+            continue // 嘗試下一個設定
+          }
+        }
+
+        if (!newStream) {
+          throw lastError || new Error('無法啟動攝影機')
+        }
+
+        // 設定影片來源
+        videoRef.current.srcObject = newStream
+
+        // 等待影片元素載入完成（加入超時）
+        await Promise.race([
+          new Promise<void>((resolve, reject) => {
+            if (!videoRef.current) {
+              reject(new Error('影片元素未準備就緒'))
+              return
+            }
+
+            const video = videoRef.current
+
+            // 處理載入完成事件
+            video.onloadedmetadata = () => {
+              console.log('影片元數據載入完成')
+              video.play()
+                .then(() => {
+                  console.log('影片播放成功')
+                  resolve(void 0)
+                })
+                .catch(error => {
+                  console.error('播放影片時發生錯誤:', error)
+                  reject(error)
+                })
+            }
+
+            // 處理錯誤事件
+            video.onerror = (error) => {
+              console.error('影片載入錯誤:', error)
+              reject(error)
+            }
+
+            // 如果已經有 metadata，直接播放
+            if (video.readyState >= 1) {
+              video.play()
+                .then(() => {
+                  console.log('影片播放成功（已有metadata）')
+                  resolve(void 0)
+                })
+                .catch(error => {
+                  console.error('播放影片時發生錯誤:', error)
+                  reject(error)
+                })
+            }
+          }),
+          new Promise<never>((_, reject) =>
+            setTimeout(() => reject(new Error('影片載入超時')), 5000)
+          )
+        ])
+
+        setStream(newStream)
+        setFaceDetected(false)
+
+        toast({
+          title: "開始辨識",
+          description: "請將臉部對準框框中心",
+        })
+
+      } catch (error: any) {
+        console.error('Error accessing camera:', error)
+
+        // 清理失敗的資源
+        if (stream) {
+          stream.getTracks().forEach(track => track.stop())
+          setStream(null)
+        }
+        if (videoRef.current) {
+          videoRef.current.srcObject = null
+        }
+
+        if (error.name === 'NotAllowedError') {
+          toast({
+            title: "攝影機存取失敗",
+            description: "請確認已允許攝影機權限，並重新整理頁面後再試一次",
+            variant: "destructive",
+            duration: 5000,
+          })
+        } else if (error.name === 'NotFoundError') {
+          toast({
+            title: "找不到攝影機",
+            description: "請確認您的裝置已正確連接攝影機，並重新整理頁面",
+            variant: "destructive",
+          })
+        } else if (error.message === '攝影機啟動超時' || error.message === '影片載入超時') {
+          toast({
+            title: "攝影機啟動超時",
+            description: "攝影機啟動時間過長，請檢查攝影機是否被其他應用程式佔用，或重新整理頁面再試",
+            variant: "destructive",
+            duration: 8000,
+          })
+        } else {
+          toast({
+            title: "錯誤",
+            description: `無法啟動攝影機：${error.message}`,
+            variant: "destructive",
+          })
+        }
+
+        stopFaceLogin()
+      }
+    } catch (error) {
+      console.error('Error verifying email:', error)
+      setFaceLoginEmailError("驗證電子郵件時發生錯誤")
+    } finally {
+      setVerifyingEmail(false)
     }
   }
 
@@ -100,7 +320,14 @@ export default function LoginPage() {
       stream.getTracks().forEach(track => track.stop())
       setStream(null)
     }
+    if (videoRef.current) {
+      videoRef.current.srcObject = null
+    }
     setIsFaceLoginMode(false)
+    setIsEmailVerified(false)
+    setFaceDetected(false)
+    localStorage.removeItem('tempUserId')
+    localStorage.removeItem('tempEmail')
   }
 
   // 處理人臉辨識
@@ -111,82 +338,254 @@ export default function LoginPage() {
     const canvas = canvasRef.current
 
     let animationFrameId: number
+    let lastDetectionTime = 0
+    const DETECTION_INTERVAL = 100
+
+    // 根據用戶類型設定正確的角色
+    let role = ""
+    switch (userType) {
+      case "user":
+        role = "member"  // 使用資料庫表名
+        break
+      case "delivery":
+        role = "deliveryman"  // 使用資料庫表名
+        break
+      default:
+        console.error("不支援此用戶類型的人臉辨識登入")
+        return
+    }
 
     const detectFace = async () => {
-      if (video.readyState === 4) {
+      const now = Date.now()
+      if (now - lastDetectionTime < DETECTION_INTERVAL) {
+        animationFrameId = requestAnimationFrame(detectFace)
+        return
+      }
+      lastDetectionTime = now
+
+      if (video.readyState !== 4) {
+        animationFrameId = requestAnimationFrame(detectFace)
+        return
+      }
+
+      try {
         const detections = await faceapi.detectAllFaces(video, new faceapi.TinyFaceDetectorOptions())
           .withFaceLandmarks()
           .withFaceDescriptors()
 
-        // 清除畫布
-        const ctx = canvas.getContext('2d')
-        ctx?.clearRect(0, 0, canvas.width, canvas.height)
+        // 設定 canvas 尺寸
+        canvas.width = video.videoWidth
+        canvas.height = video.videoHeight
 
-        // 繪製偵測結果
-        if (detections.length > 0) {
-          const dims = faceapi.matchDimensions(canvas, video, true)
-          const resizedDetections = faceapi.resizeResults(detections, dims)
-          faceapi.draw.drawDetections(canvas, resizedDetections)
+        const context = canvas.getContext('2d')
+        if (!context) return
 
-          // 取得當前偵測到的人臉特徵
-          const currentFaceDescriptor = detections[0].descriptor
+        context.clearRect(0, 0, canvas.width, canvas.height)
 
-          try {
-            // 從資料庫取得已儲存的人臉特徵
-            const response = await fetch('/api/face-auth?userId=current-user-id')
-            if (!response.ok) {
-              throw new Error('取得已儲存人臉特徵失敗')
+        // 繪製理想位置的框框
+        const idealSize = Math.min(canvas.width, canvas.height) * 0.7
+        const idealX = (canvas.width - idealSize) / 2
+        const idealY = (canvas.height - idealSize) / 2
+
+        // 繪製外框和提示文字
+        context.strokeStyle = '#ffffff'
+        context.lineWidth = 3
+        context.setLineDash([5, 5])
+        context.strokeRect(idealX, idealY, idealSize, idealSize)
+
+        // 添加提示文字
+        context.font = '20px Arial'
+        context.fillStyle = '#ffffff'
+        context.textAlign = 'center'
+
+        if (detections.length === 0) {
+          context.fillText('未偵測到人臉', canvas.width / 2, 30)
+          context.fillText('請將臉部對準框框', canvas.width / 2, 60)
+        } else if (detections.length > 1) {
+          context.fillText('偵測到多個人臉', canvas.width / 2, 30)
+          context.fillText('請確保畫面中只有一個人臉', canvas.width / 2, 60)
+        }
+
+        // 繪製四角標記
+        const cornerSize = 30
+        context.setLineDash([])
+        context.beginPath()
+        // 左上角
+        context.moveTo(idealX, idealY + cornerSize)
+        context.lineTo(idealX, idealY)
+        context.lineTo(idealX + cornerSize, idealY)
+        // 右上角
+        context.moveTo(idealX + idealSize - cornerSize, idealY)
+        context.lineTo(idealX + idealSize, idealY)
+        context.lineTo(idealX + idealSize, idealY + cornerSize)
+        // 右下角
+        context.moveTo(idealX + idealSize, idealY + idealSize - cornerSize)
+        context.lineTo(idealX + idealSize, idealY + idealSize)
+        context.lineTo(idealX + idealSize - cornerSize, idealY + idealSize)
+        // 左下角
+        context.moveTo(idealX + cornerSize, idealY + idealSize)
+        context.lineTo(idealX, idealY + idealSize)
+        context.lineTo(idealX, idealY + idealSize - cornerSize)
+        context.stroke()
+
+        if (detections.length === 1) {
+          const detection = detections[0]
+
+          // 確保 detection 和 box 都存在
+          if (!detection || !detection.box) {
+            context.fillText('無法取得人臉位置資訊', canvas.width / 2, 30)
+            context.fillText('請稍候再試', canvas.width / 2, 60)
+            animationFrameId = requestAnimationFrame(detectFace)
+            return
+          }
+
+          const box = detection.box
+
+          // 檢查人臉是否在理想位置
+          const isInPosition = (
+            box.x > idealX &&
+            box.y > idealY &&
+            box.x + box.width < idealX + idealSize &&
+            box.y + box.height < idealY + idealSize
+          )
+
+          // 繪製人臉檢測框
+          context.strokeStyle = isInPosition ? '#00ff00' : '#ff0000'
+          context.lineWidth = 2
+          context.setLineDash([])
+          context.strokeRect(box.x, box.y, box.width, box.height)
+
+          // 添加位置提示文字
+          if (!isInPosition) {
+            let message = ''
+            if (box.x <= idealX) {
+              message = '請向右移動'
+            } else if (box.x + box.width >= idealX + idealSize) {
+              message = '請向左移動'
+            } else if (box.y <= idealY) {
+              message = '請向下移動'
+            } else if (box.y + box.height >= idealY + idealSize) {
+              message = '請向上移動'
             }
 
-            const data = await response.json()
-            if (!data.success) {
-              throw new Error(data.error || '找不到已儲存的人臉特徵')
+            if (box.width > idealSize || box.height > idealSize) {
+              message = '請後退一些'
+            } else if (box.width < idealSize * 0.5 || box.height < idealSize * 0.5) {
+              message = '請靠近一些'
             }
 
-            // 將已儲存的特徵轉換為 Float32Array
-            const storedDescriptor = new Float32Array(data.faceDescriptor)
+            context.fillText(message, canvas.width / 2, 30)
+          } else {
+            context.fillStyle = '#00ff00'
+            context.fillText('位置正確！請保持不動', canvas.width / 2, 30)
+          }
 
-            // 計算特徵相似度
-            const distance = faceapi.euclideanDistance(currentFaceDescriptor, storedDescriptor)
-
-            // 如果相似度夠高（距離夠小），則視為同一個人
-            if (distance < 0.6) { // 可以調整這個閾值
-              handleFaceLoginSuccess()
+          if (isInPosition) {
+            // 確保 descriptor 存在
+            if (!detection.descriptor) {
+              context.fillStyle = '#ffffff'
+              context.fillText('正在分析人臉特徵...', canvas.width / 2, 60)
+              animationFrameId = requestAnimationFrame(detectFace)
               return
             }
-          } catch (error) {
-            console.error('Error comparing face descriptors:', error)
-            toast({
-              title: "錯誤",
-              description: "比對人臉特徵時發生錯誤",
-              variant: "destructive",
-            })
-            stopFaceLogin()
-            return
+
+            const currentFaceDescriptor = detection.descriptor
+
+            try {
+              // 從資料庫取得已儲存的人臉特徵
+              const response = await fetch(`/api/face-auth?userId=${localStorage.getItem('tempUserId')}&role=${role}`)
+              if (!response.ok) {
+                throw new Error('取得已儲存人臉特徵失敗')
+              }
+
+              const data = await response.json()
+              if (!data.success) {
+                throw new Error(data.error || '找不到已儲存的人臉特徵')
+              }
+
+              // 將已儲存的特徵轉換為 Float32Array
+              const storedDescriptor = new Float32Array(data.data.faceDescriptor)
+
+              // 計算特徵相似度
+              const distance = faceapi.euclideanDistance(currentFaceDescriptor, storedDescriptor)
+
+              // 如果相似度夠高（距離夠小），則視為同一個人
+              if (distance < 0.6) {
+                handleFaceLoginSuccess(data.data.userId)
+                return
+              }
+            } catch (error) {
+              console.error('Error comparing face descriptors:', error)
+            }
           }
         }
 
         animationFrameId = requestAnimationFrame(detectFace)
-      } else {
+      } catch (error) {
+        console.error('Face detection error:', error)
         animationFrameId = requestAnimationFrame(detectFace)
       }
     }
 
-    video.addEventListener('play', detectFace)
+    detectFace()
 
     return () => {
-      cancelAnimationFrame(animationFrameId)
+      if (animationFrameId) {
+        cancelAnimationFrame(animationFrameId)
+      }
     }
-  }, [isFaceLoginMode, modelsLoaded])
+  }, [isFaceLoginMode, modelsLoaded, userType])
 
   // 人臉登入成功處理
-  const handleFaceLoginSuccess = () => {
+  const handleFaceLoginSuccess = async (userId: string) => {
     stopFaceLogin()
-    toast({
-      title: "登入成功",
-      description: "已透過人臉辨識成功登入",
-    })
-    router.push("/user/home")
+
+    try {
+      // 使用人臉辨識結果進行登入
+      const loginResponse = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          username: localStorage.getItem('tempEmail'),
+          role: userType,
+          faceDescriptor: true // 表示這是人臉辨識登入
+        }),
+      })
+
+      const loginData = await loginResponse.json()
+
+      if (loginData.success) {
+        localStorage.setItem("userId", loginData.data.mid)
+        localStorage.removeItem('tempUserId')
+        localStorage.removeItem('tempEmail')
+
+        toast({
+          title: "登入成功",
+          description: "已透過人臉辨識成功登入",
+        })
+
+        if (userType === "user") {
+          router.push("/user/home")
+        } else if (userType === "delivery") {
+          router.push("/delivery/dashboard")
+        }
+      } else {
+        toast({
+          title: "登入失敗",
+          description: loginData.message || "人臉辨識登入失敗",
+          variant: "destructive",
+        })
+      }
+    } catch (error) {
+      console.error('人臉登入失敗:', error)
+      toast({
+        title: "錯誤",
+        description: "人臉辨識登入失敗",
+        variant: "destructive",
+      })
+    }
   }
 
   const handleLogin = async (e: React.FormEvent) => {
@@ -198,12 +597,16 @@ export default function LoginPage() {
       return
     }
 
+    // 驗證 email 格式
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+    if (!emailRegex.test(username)) {
+      setError("請輸入有效的電子郵件地址")
+      return
+    }
+
     setIsLoading(true)
 
     try {
-      // 模擬API請求延遲
-      await new Promise((resolve) => setTimeout(resolve, 800))
-
       if (userType === "restaurant") {
         // 檢查餐廳帳號密碼
         const account = restaurantAccounts.find(
@@ -211,23 +614,19 @@ export default function LoginPage() {
         )
 
         if (account) {
-          // 儲存登入資訊到 localStorage
           localStorage.setItem("restaurantAccount", JSON.stringify(account))
-
           toast({
             title: "登入成功",
             description: `歡迎回來，${account.restaurantName}`,
           })
-
-          // 直接導向店家儀表板
           router.push("/restaurant/dashboard")
           return
         } else {
           setError("帳號或密碼錯誤")
         }
       } else {
-        // 處理用戶或外送員登入
         try {
+          // 使用明文密碼進行登入
           const response = await fetch("/api/auth/login", {
             method: "POST",
             headers: {
@@ -236,35 +635,40 @@ export default function LoginPage() {
             body: JSON.stringify({
               username,
               password,
-              role: userType
+              role: userType === "user" ? "member" : "deliveryman",
+              plaintext: true  // 添加標記表示使用明文密碼
             }),
-          });
+          })
 
-          const data = await response.json();
+          if (!response.ok) {
+            const errorData = await response.json()
+            throw new Error(errorData.message || "登入失敗")
+          }
+
+          const data = await response.json()
 
           if (data.success) {
-            localStorage.setItem("userId", data.data.mid);
-
+            localStorage.setItem("userId", data.data.mid)
             toast({
               title: "登入成功",
               description: `歡迎回來，${data.data.name}！`,
-            });
+            })
 
-            // 根據用戶類型導向不同頁面
             if (userType === "user") {
-              router.push("/user/home");
+              router.push("/user/home")
             } else if (userType === "delivery") {
-              router.push("/delivery/dashboard");
+              router.push("/delivery/dashboard")
             }
           } else {
-            setError(data.message || "帳號或密碼錯誤");
+            setError(data.message || "帳號或密碼錯誤")
           }
-        } catch (error) {
-          console.error("登入失敗:", error);
-          setError("登入時發生錯誤，請稍後再試");
+        } catch (error: any) {
+          console.error("登入失敗:", error)
+          setError(error.message || "登入時發生錯誤，請稍後再試")
         }
       }
-    } catch (error) {
+    } catch (error: any) {
+      console.error("登入失敗:", error)
       setError("登入時發生錯誤，請稍後再試")
     } finally {
       setIsLoading(false)
@@ -309,26 +713,118 @@ export default function LoginPage() {
               <CardContent>
                 {isFaceLoginMode ? (
                   <div className="space-y-4">
-                    <div className="relative">
-                      <video
-                        ref={videoRef}
-                        autoPlay
-                        playsInline
-                        muted
-                        className="w-full rounded-lg"
-                      />
-                      <canvas
-                        ref={canvasRef}
-                        className="absolute top-0 left-0 w-full h-full"
-                      />
+                    {!isEmailVerified ? (
+                      <div className="space-y-4">
+                        <div className="bg-slate-100 p-4 rounded-lg">
+                          <h3 className="text-lg font-semibold mb-2">人臉辨識登入</h3>
+                          <p className="text-sm text-muted-foreground mb-4">
+                            請輸入您的電子郵件以開始人臉辨識登入
+                          </p>
+                          <div className="space-y-2">
+                            <Input
+                              type="email"
+                              placeholder="請輸入電子郵件"
+                              value={faceLoginEmail}
+                              onChange={(e) => {
+                                setFaceLoginEmail(e.target.value)
+                                setFaceLoginEmailError(null)
+                              }}
+                            />
+                            {faceLoginEmailError && (
+                              <p className="text-sm text-red-500">{faceLoginEmailError}</p>
+                            )}
+                          </div>
+                          <div className="flex gap-2 mt-4">
+                            <Button
+                              onClick={verifyEmail}
+                              className="flex-1"
+                              disabled={verifyingEmail}
+                            >
+                              {verifyingEmail ? (
+                                <>
+                                  <span className="animate-spin mr-2">⭮</span>
+                                  驗證中...
+                                </>
+                              ) : (
+                                "開始辨識"
+                              )}
+                            </Button>
+                            <Button
+                              onClick={() => {
+                                setIsFaceLoginMode(false)
+                                setFaceLoginEmail("")
+                                setFaceLoginEmailError(null)
+                              }}
+                              variant="outline"
+                            >
+                              取消
+                            </Button>
+                          </div>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="flex flex-col md:flex-row gap-4">
+                        {/* 左側指引區域 */}
+                        <div className="md:w-1/3 space-y-4">
+                          <div className="bg-slate-100 p-4 rounded-lg">
+                            <h3 className="text-lg font-semibold mb-2">登入步驟</h3>
+                            <ul className="space-y-2 text-sm">
+                              <li className="flex items-center gap-2">
+                                <span className="flex-shrink-0 w-6 h-6 flex items-center justify-center rounded-full bg-primary text-white text-xs">1</span>
+                                <span>確保光線充足</span>
+                              </li>
+                              <li className="flex items-center gap-2">
+                                <span className="flex-shrink-0 w-6 h-6 flex items-center justify-center rounded-full bg-primary text-white text-xs">2</span>
+                                <span>將臉部對準框框中心</span>
+                              </li>
+                              <li className="flex items-center gap-2">
+                                <span className="flex-shrink-0 w-6 h-6 flex items-center justify-center rounded-full bg-primary text-white text-xs">3</span>
+                                <span>保持不動，等待辨識</span>
+                              </li>
+                            </ul>
+                          </div>
+                          <div className="bg-slate-100 p-4 rounded-lg">
+                            <h3 className="text-lg font-semibold mb-2">目前狀態</h3>
+                            <div className="space-y-2">
+                              <div className={`flex items-center gap-2 ${faceDetected ? "text-green-600" : "text-red-500"}`}>
+                                <div className={`w-2 h-2 rounded-full ${faceDetected ? "bg-green-600" : "bg-red-500"}`} />
+                                {faceDetected ? "人臉位置正確" : "請調整位置"}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* 右側攝影機區域 */}
+                        <div className="md:w-2/3">
+                          <div className="relative bg-black rounded-lg overflow-hidden">
+                            <div className="relative aspect-[4/3]">
+                              <video
+                                ref={videoRef}
+                                autoPlay
+                                playsInline
+                                muted
+                                className="w-full h-full object-cover"
+                                style={{ transform: 'scaleX(-1)' }}
+                              />
+                              <canvas
+                                ref={canvasRef}
+                                className="absolute top-0 left-0 w-full h-full"
+                                style={{ transform: 'scaleX(-1)' }}
+                              />
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                    <div className="flex gap-2">
+                      <Button
+                        onClick={stopFaceLogin}
+                        variant="outline"
+                        className="w-full"
+                      >
+                        取消
+                      </Button>
                     </div>
-                    <Button
-                      onClick={stopFaceLogin}
-                      variant="outline"
-                      className="w-full"
-                    >
-                      取消人臉辨識
-                    </Button>
                   </div>
                 ) : (
                   <form onSubmit={handleLogin} className="space-y-4">
@@ -357,7 +853,7 @@ export default function LoginPage() {
                       <Button type="submit" className="w-full" disabled={isLoading}>
                         {isLoading ? "登入中..." : "登入"}
                       </Button>
-                      {userType === "user" && (
+                      {(userType === "user" || userType === "delivery") && (
                         <Button
                           type="button"
                           onClick={startFaceLogin}

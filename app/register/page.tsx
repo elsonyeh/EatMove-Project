@@ -43,6 +43,17 @@ export default function RegisterPage() {
   const [captureCount, setCaptureCount] = useState(0)
   const REQUIRED_CAPTURES = 3
   const [phonenumber, setPhoneNumber] = useState("")
+  const [passwordError, setPasswordError] = useState<string | null>(null)
+  const [emailError, setEmailError] = useState<string | null>(null)
+
+  // 設定 canvas 的 willReadFrequently 屬性
+  useEffect(() => {
+    if (canvasRef.current) {
+      const ctx = canvasRef.current.getContext('2d', {
+        willReadFrequently: true
+      })
+    }
+  }, [])
 
   // 載入人臉辨識模型
   useEffect(() => {
@@ -55,6 +66,7 @@ export default function RegisterPage() {
           faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL),
         ])
         setModelsLoaded(true)
+        console.log("✅ 人臉辨識模型載入成功")
       } catch (error) {
         console.error('Error loading models:', error)
         toast({
@@ -65,7 +77,6 @@ export default function RegisterPage() {
       }
     }
 
-    // 確保 faceapi 已載入
     if (typeof faceapi !== 'undefined') {
       loadModels()
     }
@@ -115,36 +126,117 @@ export default function RegisterPage() {
         throw new Error('影片元素未準備就緒')
       }
 
-      // 嘗試獲取攝影機權限
-      const newStream = await navigator.mediaDevices.getUserMedia({
-        video: {
-          width: { ideal: 1280 },
-          height: { ideal: 720 },
-          facingMode: "user"
+      // 嘗試多種攝影機設定
+      const cameraConfigs = [
+        {
+          video: {
+            width: { ideal: 640 },
+            height: { ideal: 480 },
+            facingMode: "user"
+          }
+        },
+        {
+          video: {
+            width: { ideal: 1280 },
+            height: { ideal: 720 },
+            facingMode: "user"
+          }
+        },
+        {
+          video: true
         }
-      })
+      ]
+
+      let newStream: MediaStream | null = null
+      let lastError = null
+
+      for (const config of cameraConfigs) {
+        try {
+          console.log('嘗試攝影機設定:', config)
+          const result = await Promise.race([
+            navigator.mediaDevices.getUserMedia(config),
+            new Promise<never>((_, reject) =>
+              setTimeout(() => reject(new Error('攝影機啟動超時')), 10000)
+            )
+          ])
+          newStream = result as MediaStream
+          break // 成功則跳出迴圈
+        } catch (error) {
+          console.warn('攝影機設定失敗:', config, error)
+          lastError = error
+          continue // 嘗試下一個設定
+        }
+      }
+
+      if (!newStream) {
+        throw lastError || new Error('無法啟動攝影機')
+      }
 
       // 設定影片來源並等待載入
       videoRef.current.srcObject = newStream
-      await new Promise((resolve) => {
-        if (!videoRef.current) return
-        videoRef.current.onloadedmetadata = () => {
-          if (videoRef.current) {
-            videoRef.current.play()
-              .then(resolve)
+
+      // 等待影片元素載入完成（加入超時）
+      await Promise.race([
+        new Promise<void>((resolve, reject) => {
+          if (!videoRef.current) {
+            reject(new Error('影片元素未準備就緒'))
+            return
+          }
+
+          const video = videoRef.current
+
+          // 處理載入完成事件
+          video.onloadedmetadata = () => {
+            console.log('影片元數據載入完成')
+            video.play()
+              .then(() => {
+                console.log('影片播放成功')
+                resolve(void 0)
+              })
               .catch(error => {
                 console.error('播放影片時發生錯誤:', error)
-                resolve(null)
+                reject(error)
               })
           }
-        }
-      })
+
+          // 處理錯誤事件
+          video.onerror = (error) => {
+            console.error('影片載入錯誤:', error)
+            reject(error)
+          }
+
+          // 如果已經有 metadata，直接播放
+          if (video.readyState >= 1) {
+            video.play()
+              .then(() => {
+                console.log('影片播放成功（已有metadata）')
+                resolve(void 0)
+              })
+              .catch(error => {
+                console.error('播放影片時發生錯誤:', error)
+                reject(error)
+              })
+          }
+        }),
+        new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error('影片載入超時')), 5000)
+        )
+      ])
 
       setStream(newStream)
       setIsFaceRegistering(true)
 
     } catch (error: any) {
       console.error('Error accessing camera:', error)
+
+      // 清理失敗的資源
+      if (stream) {
+        stream.getTracks().forEach(track => track.stop())
+        setStream(null)
+      }
+      if (videoRef.current) {
+        videoRef.current.srcObject = null
+      }
 
       if (error.name === 'NotAllowedError') {
         toast({
@@ -165,6 +257,13 @@ export default function RegisterPage() {
           description: "請確認沒有其他程式正在使用攝影機，並重新整理頁面",
           variant: "destructive",
         })
+      } else if (error.message === '攝影機啟動超時' || error.message === '影片載入超時') {
+        toast({
+          title: "攝影機啟動超時",
+          description: "攝影機啟動時間過長，請檢查攝影機是否被其他應用程式佔用，或重新整理頁面再試",
+          variant: "destructive",
+          duration: 8000,
+        })
       } else {
         toast({
           title: "錯誤",
@@ -174,10 +273,6 @@ export default function RegisterPage() {
       }
 
       // 清理任何可能的殘留資源
-      if (stream) {
-        stream.getTracks().forEach(track => track.stop())
-        setStream(null)
-      }
       setIsFaceRegistering(false)
     }
   }
@@ -205,7 +300,7 @@ export default function RegisterPage() {
   useEffect(() => {
     let animationFrameId: number
     let lastDetectionTime = 0
-    const DETECTION_INTERVAL = 100 // 每100ms檢查一次
+    const DETECTION_INTERVAL = 100
 
     const detectFace = async () => {
       if (!videoRef.current || !isFaceRegistering || !modelsLoaded) return
@@ -221,7 +316,6 @@ export default function RegisterPage() {
         const video = videoRef.current
         const canvas = canvasRef.current
 
-        // 確保影片已經有正確的尺寸
         if (video.videoWidth === 0 || video.videoHeight === 0) {
           animationFrameId = requestAnimationFrame(detectFace)
           return
@@ -233,7 +327,6 @@ export default function RegisterPage() {
         )
 
         if (canvas) {
-          // 設定 canvas 尺寸與影片相同
           canvas.width = video.videoWidth
           canvas.height = video.videoHeight
 
@@ -241,8 +334,8 @@ export default function RegisterPage() {
           if (context) {
             context.clearRect(0, 0, canvas.width, canvas.height)
 
-            // 繪製理想位置的框框
-            const idealSize = Math.min(canvas.width, canvas.height) * 0.5
+            // 增大理想位置的框框
+            const idealSize = Math.min(canvas.width, canvas.height) * 0.7 // 增加到 70% 的大小
             const idealX = (canvas.width - idealSize) / 2
             const idealY = (canvas.height - idealSize) / 2
 
@@ -253,7 +346,7 @@ export default function RegisterPage() {
             context.strokeRect(idealX, idealY, idealSize, idealSize)
 
             // 繪製四角標記
-            const cornerSize = 20
+            const cornerSize = 30 // 增加角標記的大小
             context.setLineDash([])
             context.beginPath()
             // 左上角
@@ -274,21 +367,10 @@ export default function RegisterPage() {
             context.lineTo(idealX, idealY + idealSize - cornerSize)
             context.stroke()
 
-            // 添加指引文字
-            context.font = '24px Arial'
-            context.fillStyle = '#ffffff'
-            context.textAlign = 'center'
-            context.fillText(
-              '請將臉部對準框框中心',
-              canvas.width / 2,
-              idealY - 20
-            )
-
             if (detections.length === 1) {
               const detection = detections[0]
               const box = detection.box
 
-              // 檢查人臉是否在理想位置
               const isInPosition = (
                 box.x > idealX &&
                 box.y > idealY &&
@@ -296,7 +378,6 @@ export default function RegisterPage() {
                 box.y + box.height < idealY + idealSize
               )
 
-              // 繪製人臉檢測框
               context.strokeStyle = isInPosition ? '#00ff00' : '#ff0000'
               context.lineWidth = 2
               context.setLineDash([])
@@ -392,87 +473,105 @@ export default function RegisterPage() {
     }
   }
 
-  const handleRegister = async () => {
-    console.log("⚡ 點擊註冊")
+  // 檢查電子郵件格式
+  const validateEmail = (email: string) => {
+    if (email.length === 0) {
+      setEmailError(null)
+      return
+    }
+    const emailRegex = /^[a-zA-Z0-9._-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/
+    if (!emailRegex.test(email)) {
+      setEmailError("請輸入有效的電子郵件地址")
+      return
+    }
+    setEmailError(null)
+  }
 
-    if (!username || !email || !password || !confirmPassword || (userType === "restaurant" && !account)) {
+  // 監聽電子郵件變更
+  useEffect(() => {
+    validateEmail(email)
+  }, [email])
+
+  // 檢查密碼規則
+  const checkPassword = (value: string) => {
+    if (value.length === 0) {
+      setPasswordError(null)
+      return
+    }
+    if (value.length < 6) {
+      setPasswordError("密碼長度必須至少為 6 個字元")
+      return
+    }
+    setPasswordError(null)
+  }
+
+  // 監聽密碼變更
+  useEffect(() => {
+    checkPassword(password)
+  }, [password])
+
+  const handleRegister = async () => {
+    // 基本驗證
+    if (!email || !password || !confirmPassword || !username || !phonenumber) {
       toast({
-        title: "註冊失敗",
-        description: "請填寫所有欄位",
+        title: "錯誤",
+        description: "請填寫所有必要欄位",
         variant: "destructive",
       })
       return
     }
 
+    // 驗證密碼確認
     if (password !== confirmPassword) {
       toast({
-        title: "註冊失敗",
-        description: "兩次輸入的密碼不一致",
+        title: "錯誤",
+        description: "密碼與確認密碼不符",
         variant: "destructive",
       })
       return
-    }
-
-    const payload = {
-      role:
-        userType === "user"
-          ? "member"
-          : userType === "restaurant"
-            ? "restaurant"
-            : "deliveryman",
-      account: userType === "restaurant" ? account : undefined,
-      name: username,
-      email,
-      password,
-      phonenumber,
-      address: "暫時地址",
-      description: "暫時描述",
     }
 
     try {
-      // 註冊用戶
-      const res = await fetch("/api/member", {
+      // 準備註冊資料
+      const registrationData = {
+        name: username,
+        email,
+        password,
+        phonenumber,
+        role: userType === "user" ? "member" : "deliveryman",
+        face_descriptor: faceDescriptor ? Array.from(faceDescriptor) : null,
+        plaintext: true // 添加明文密碼標記
+      }
+
+      // 發送註冊請求
+      const response = await fetch("/api/auth/register", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify(payload),
+        body: JSON.stringify(registrationData),
       })
 
-      const data = await res.json()
+      const data = await response.json()
 
-      if (!res.ok || !data.success) {
-        throw new Error(data.message || "註冊失敗")
-      }
-
-      // 如果是用戶且有人臉特徵，則儲存人臉特徵
-      if (userType === "user" && faceDescriptor) {
-        const faceRes = await fetch('/api/face-auth', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            userId: data.userId, // 假設 API 回傳了用戶 ID
-            faceDescriptor: Array.from(faceDescriptor),
-          }),
+      if (data.success) {
+        toast({
+          title: "註冊成功",
+          description: "請使用新帳號登入",
         })
-
-        if (!faceRes.ok) {
-          console.error('儲存人臉特徵失敗')
-        }
+        router.push("/login")
+      } else {
+        toast({
+          title: "註冊失敗",
+          description: data.message || "註冊時發生錯誤",
+          variant: "destructive",
+        })
       }
-
+    } catch (error) {
+      console.error("註冊失敗:", error)
       toast({
-        title: "註冊成功",
-        description: "請登入您的帳號",
-      })
-
-      router.push("/login")
-    } catch (err: any) {
-      toast({
-        title: "註冊失敗",
-        description: err.message,
+        title: "錯誤",
+        description: "註冊時發生錯誤，請稍後再試",
         variant: "destructive",
       })
     }
@@ -520,38 +619,79 @@ export default function RegisterPage() {
               </CardHeader>
               <CardContent>
                 {isFaceRegistering ? (
-                  <div className="space-y-4 mb-6">
-                    <div className="relative w-full max-w-2xl mx-auto">
-                      <div className="relative aspect-video">
-                        <video
-                          ref={videoRef}
-                          autoPlay
-                          playsInline
-                          muted
-                          className="w-full h-full object-cover rounded-lg"
-                        />
-                        <canvas
-                          ref={canvasRef}
-                          className="absolute top-0 left-0 w-full h-full"
-                          style={{ objectFit: 'cover' }}
-                        />
-                        <div className="absolute top-4 left-0 w-full text-center z-10">
-                          <div className="inline-block bg-black bg-opacity-50 text-white px-4 py-2 rounded-full">
-                            {faceDetected ? "✅ 人臉位置正確" : "請將臉部對準框框中心"}
+                  <div className="space-y-4">
+                    <div className="flex flex-col md:flex-row gap-4">
+                      {/* 左側指引區域 */}
+                      <div className="md:w-1/3 space-y-4">
+                        <div className="bg-slate-100 p-4 rounded-lg">
+                          <h3 className="text-lg font-semibold mb-2">註冊步驟</h3>
+                          <ul className="space-y-2 text-sm">
+                            <li className="flex items-center gap-2">
+                              <span className="flex-shrink-0 w-6 h-6 flex items-center justify-center rounded-full bg-primary text-white text-xs">1</span>
+                              <span>確保光線充足</span>
+                            </li>
+                            <li className="flex items-center gap-2">
+                              <span className="flex-shrink-0 w-6 h-6 flex items-center justify-center rounded-full bg-primary text-white text-xs">2</span>
+                              <span>將臉部對準框框中心</span>
+                            </li>
+                            <li className="flex items-center gap-2">
+                              <span className="flex-shrink-0 w-6 h-6 flex items-center justify-center rounded-full bg-primary text-white text-xs">3</span>
+                              <span>保持不動，等待擷取</span>
+                            </li>
+                          </ul>
+                        </div>
+                        <div className="bg-slate-100 p-4 rounded-lg">
+                          <h3 className="text-lg font-semibold mb-2">目前狀態</h3>
+                          <div className="space-y-2">
+                            <div className={`flex items-center gap-2 ${faceDetected ? "text-green-600" : "text-red-500"}`}>
+                              <div className={`w-2 h-2 rounded-full ${faceDetected ? "bg-green-600" : "bg-red-500"}`} />
+                              {faceDetected ? "人臉位置正確" : "請調整位置"}
+                            </div>
+                            <div className="text-sm">
+                              已擷取: {captureCount} / {REQUIRED_CAPTURES} 張
+                            </div>
                           </div>
-                          <div className="mt-2 inline-block bg-black bg-opacity-50 text-white px-4 py-2 rounded-full">
-                            已擷取: {captureCount} / {REQUIRED_CAPTURES} 張
+                        </div>
+                      </div>
+
+                      {/* 右側攝影機區域 */}
+                      <div className="md:w-2/3">
+                        <div className="relative bg-black rounded-lg overflow-hidden">
+                          <div className="relative aspect-[4/3]">
+                            <video
+                              ref={videoRef}
+                              autoPlay
+                              playsInline
+                              muted
+                              className="w-full h-full object-cover"
+                              style={{ transform: 'scaleX(-1)' }}
+                            />
+                            <canvas
+                              ref={canvasRef}
+                              className="absolute top-0 left-0 w-full h-full"
+                              style={{ transform: 'scaleX(-1)' }}
+                            />
                           </div>
                         </div>
                       </div>
                     </div>
-                    <div className="flex gap-2">
+
+                    {/* 底部按鈕區域 */}
+                    <div className="flex gap-2 mt-4">
                       <Button
                         onClick={captureFace}
                         className="flex-1"
                         disabled={!faceDetected || isCapturing}
+                        variant={faceDetected ? "default" : "secondary"}
                       >
-                        {isCapturing ? "擷取中..." : (faceDetected ? "擷取人臉" : "請對準框框")}
+                        {isCapturing ? (
+                          <>
+                            <span className="animate-spin mr-2">⭮</span>
+                            擷取中...
+                          </>
+                        ) : (
+                          faceDetected ? "擷取人臉" : "請對準框框"
+                        )}
                       </Button>
                       <Button
                         onClick={stopFaceRegistration}
@@ -563,17 +703,6 @@ export default function RegisterPage() {
                   </div>
                 ) : (
                   <form className="space-y-4">
-                    {userType === "restaurant" && (
-                      <div className="space-y-2">
-                        <Label htmlFor="account">店家帳號</Label>
-                        <Input
-                          id="account"
-                          placeholder="請輸入店家帳號"
-                          value={account}
-                          onChange={(e) => setAccount(e.target.value)}
-                        />
-                      </div>
-                    )}
                     <div className="space-y-2">
                       <Label htmlFor="username">
                         {userType === "restaurant" ? "店家名稱" : "用戶名稱"}
@@ -598,6 +727,12 @@ export default function RegisterPage() {
                         value={email}
                         onChange={(e) => setEmail(e.target.value)}
                       />
+                      {emailError && (
+                        <p className="text-sm text-red-500">{emailError}</p>
+                      )}
+                      <p className="text-sm text-muted-foreground">
+                        請輸入有效的電子郵件地址，例如：example@domain.com
+                      </p>
                     </div>
                     <div className="space-y-2">
                       <Label htmlFor="phonenumber">電話號碼</Label>
@@ -618,6 +753,12 @@ export default function RegisterPage() {
                         value={password}
                         onChange={(e) => setPassword(e.target.value)}
                       />
+                      {passwordError && (
+                        <p className="text-sm text-red-500">{passwordError}</p>
+                      )}
+                      <p className="text-sm text-muted-foreground">
+                        密碼長度必須至少為 6 個字元
+                      </p>
                     </div>
                     <div className="space-y-2">
                       <Label htmlFor="confirmPassword">確認密碼</Label>
@@ -629,7 +770,7 @@ export default function RegisterPage() {
                         onChange={(e) => setConfirmPassword(e.target.value)}
                       />
                     </div>
-                    {userType === "user" && (
+                    {(userType === "user" || userType === "delivery") && (
                       <div className="space-y-2">
                         <Label>人臉辨識（選填）</Label>
                         <div className="flex items-center gap-2">
@@ -648,7 +789,7 @@ export default function RegisterPage() {
                           )}
                         </div>
                         <p className="text-sm text-muted-foreground">
-                          註冊人臉特徵可以使用人臉辨識快速登入
+                          您可以現在註冊人臉特徵，或在登入後的設定中再進行註冊
                         </p>
                       </div>
                     )}

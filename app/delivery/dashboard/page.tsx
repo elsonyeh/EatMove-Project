@@ -1,8 +1,9 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
+import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Badge } from "@/components/ui/badge"
 import { Switch } from "@/components/ui/switch"
@@ -11,14 +12,63 @@ import { DeliveryOrderCard } from "@/components/delivery-order-card"
 import { useToast } from "@/components/ui/use-toast"
 import { deliveryOrders } from "@/lib/data"
 
-export default function DeliveryDashboardPage() {
+export default function DeliveryDashboard() {
+  const router = useRouter()
   const { toast } = useToast()
+  const [deliverymanData, setDeliverymanData] = useState<any>(null)
+  const [isLoading, setIsLoading] = useState(true)
   const [isOnline, setIsOnline] = useState(true)
 
   // 根據訂單狀態分類
   const availableOrders = deliveryOrders.filter((order) => order.status === "available")
   const acceptedOrders = deliveryOrders.filter((order) => order.status === "accepted")
   const completedOrders = deliveryOrders.filter((order) => order.status === "completed")
+
+  useEffect(() => {
+    const fetchDeliverymanData = async () => {
+      try {
+        const did = localStorage.getItem("userId")
+        if (!did) {
+          toast({
+            title: "請先登入",
+            description: "您需要登入才能訪問此頁面",
+            variant: "destructive",
+          })
+          router.push("/login")
+          return
+        }
+
+        const response = await fetch(`/api/delivery/profile?did=${did}`)
+        const data = await response.json()
+
+        if (data.success) {
+          setDeliverymanData(data.data)
+        } else {
+          throw new Error(data.message)
+        }
+      } catch (error) {
+        console.error("獲取外送員資料失敗:", error)
+        toast({
+          title: "錯誤",
+          description: "獲取外送員資料失敗",
+          variant: "destructive",
+        })
+      } finally {
+        setIsLoading(false)
+      }
+    }
+
+    fetchDeliverymanData()
+  }, [router, toast])
+
+  const handleLogout = () => {
+    localStorage.removeItem("userId")
+    router.push("/login")
+    toast({
+      title: "已登出",
+      description: "您已成功登出系統",
+    })
+  }
 
   const handleStatusChange = (checked: boolean) => {
     setIsOnline(checked)
@@ -29,31 +79,47 @@ export default function DeliveryDashboardPage() {
     })
   }
 
+  if (isLoading) {
+    return <div className="flex items-center justify-center min-h-screen">載入中...</div>
+  }
+
   return (
-    <div className="container py-6">
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold tracking-tight mb-2">外送員中心</h1>
-        <p className="text-muted-foreground">管理您的訂單和狀態</p>
+    <div className="container mx-auto p-4">
+      <div className="flex justify-between items-center mb-6">
+        <h1 className="text-3xl font-bold">外送員儀表板</h1>
+        <Button onClick={handleLogout} variant="outline">
+          登出
+        </Button>
       </div>
 
-      <div className="mb-8">
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
         <Card>
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
+          <CardHeader>
+            <CardTitle>個人資料</CardTitle>
+            <CardDescription>您的基本資訊</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-2">
               <div>
-                <h2 className="text-xl font-bold mb-1">工作狀態</h2>
-                <p className="text-muted-foreground">設定您的上線狀態以接收訂單</p>
+                <span className="font-semibold">姓名：</span>
+                {deliverymanData?.dname}
               </div>
-              <div className="flex items-center space-x-2">
-                <Switch id="online-status" checked={isOnline} onCheckedChange={handleStatusChange} />
-                <Label htmlFor="online-status">{isOnline ? "上線中" : "下線中"}</Label>
+              <div>
+                <span className="font-semibold">電子郵件：</span>
+                {deliverymanData?.demail}
+              </div>
+              <div>
+                <span className="font-semibold">電話：</span>
+                {deliverymanData?.dphonenumber}
+              </div>
+              <div>
+                <span className="font-semibold">狀態：</span>
+                {deliverymanData?.status === 'online' ? '線上' : '離線'}
               </div>
             </div>
           </CardContent>
         </Card>
-      </div>
 
-      <div className="grid gap-6 md:grid-cols-3 mb-8">
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium">今日訂單</CardTitle>

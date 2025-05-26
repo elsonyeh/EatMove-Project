@@ -3,9 +3,9 @@ import { pool } from "@/lib/db";
 
 export async function POST(req: Request) {
   try {
-    const { username, password, role } = await req.json();
+    const { username, password, role, faceDescriptor, plaintext } = await req.json();
 
-    if (!username || !password || !role) {
+    if (!username || (!password && !faceDescriptor) || !role) {
       return NextResponse.json(
         { success: false, message: "缺少必要欄位" },
         { status: 400 }
@@ -14,16 +14,22 @@ export async function POST(req: Request) {
 
     let result;
     
-    if (role === "user") {
+    if (role === "member") {
       // 查詢會員資料（使用 email 作為登入帳號）
       result = await pool.query(
-        "SELECT mid, name, email, password, phonenumber, address, wallet FROM member WHERE email = $1",
+        "SELECT mid, name, email, password, phonenumber, address, wallet, face_descriptor FROM member WHERE email = $1",
         [username]
       );
-    } else if (role === "delivery") {
+    } else if (role === "deliveryman") {
       // 查詢外送員資料
       result = await pool.query(
-        "SELECT did as mid, dname as name, demail as email, dpassword as password, dphonenumber as phonenumber FROM deliveryman WHERE demail = $1",
+        "SELECT did as mid, dname as name, demail as email, dpassword as password, dphonenumber as phonenumber, face_descriptor FROM deliveryman WHERE demail = $1",
+        [username]
+      );
+    } else if (role === "restaurant") {
+      // 查詢餐廳資料
+      result = await pool.query(
+        "SELECT rid as mid, rname as name, remail as email, rpassword as password, rphonenumber as phonenumber, raddress as address FROM restaurant WHERE remail = $1",
         [username]
       );
     }
@@ -35,17 +41,39 @@ export async function POST(req: Request) {
       );
     }
 
-    // 驗證密碼
     const user = result.rows[0];
-    if (user.password !== password) {
+
+    // 如果提供了人臉特徵，進行人臉辨識
+    if (faceDescriptor && user.face_descriptor) {
+      // 這裡應該加入人臉特徵比對的邏輯
+      // 暫時略過，等待實作
+    } else if (!password) {
       return NextResponse.json(
-        { success: false, message: "帳號或密碼錯誤" },
+        { success: false, message: "請提供密碼" },
         { status: 401 }
       );
     }
 
-    // 移除密碼後回傳用戶資料
-    const { password: _, ...userData } = user;
+    // 如果是明文密碼模式，直接比較密碼
+    if (plaintext) {
+      if (password !== user.password) {
+        return NextResponse.json(
+          { success: false, message: "帳號或密碼錯誤" },
+          { status: 401 }
+        );
+      }
+    } else {
+      // 這裡可以加入加密密碼的比對邏輯，但現在我們不需要
+      if (password !== user.password) {
+        return NextResponse.json(
+          { success: false, message: "帳號或密碼錯誤" },
+          { status: 401 }
+        );
+      }
+    }
+
+    // 移除敏感資訊後回傳用戶資料
+    const { password: _, face_descriptor: __, ...userData } = user;
     return NextResponse.json({
       success: true,
       data: userData
