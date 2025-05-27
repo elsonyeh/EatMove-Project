@@ -156,15 +156,18 @@ export async function GET(req: Request) {
     }
 
     if (status) {
-      query += ` AND o.status = $${paramIndex}`
-      params.push(status)
-      paramIndex++
-      console.log("📊 查詢指定狀態訂單，狀態:", status)
+      // 如果同時有available=true，則忽略status參數，使用available邏輯
+      if (available !== 'true') {
+        query += ` AND o.status = $${paramIndex}`
+        params.push(status)
+        paramIndex++
+        console.log("📊 查詢指定狀態訂單，狀態:", status)
+      }
     }
 
     if (available === 'true') {
       query += ` AND o.status IN ('preparing', 'ready') AND o.did IS NULL`
-      console.log("📋 查詢可接單的訂單")
+      console.log("📋 查詢可接單的訂單 (preparing 或 ready 狀態，且未分配外送員)")
     }
 
     query += ` ORDER BY o.order_time DESC`

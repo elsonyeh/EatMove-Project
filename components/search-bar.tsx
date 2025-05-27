@@ -219,8 +219,8 @@ export function SearchBar({ onSearch, initialQuery = "", initialLocation = "" }:
             </div>
           </PopoverContent>
         </Popover>
-        
-        {/* 以圖搜圖按鈕 */}
+
+        {/* AI食物分類按鈕 */}
         <Button
           type="button"
           variant="outline"
@@ -228,18 +228,18 @@ export function SearchBar({ onSearch, initialQuery = "", initialLocation = "" }:
           onClick={() => setShowImageSearch(true)}
         >
           <Camera className="h-4 w-4 mr-2" />
-          以圖搜圖
+          AI識別
         </Button>
-        
+
         <Button type="submit" className="bg-brand-primary hover:bg-brand-primary/90">
           搜尋
         </Button>
       </form>
 
-      {/* 以圖搜圖對話框 */}
-      <ImageSearch 
-        isOpen={showImageSearch} 
-        onClose={() => setShowImageSearch(false)} 
+      {/* AI食物分類對話框 */}
+      <ImageSearch
+        isOpen={showImageSearch}
+        onClose={() => setShowImageSearch(false)}
       />
     </>
   )

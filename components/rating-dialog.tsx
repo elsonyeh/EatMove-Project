@@ -62,7 +62,7 @@ export function RatingDialog({ open, onOpenChange, order, userId }: RatingDialog
         },
         body: JSON.stringify({
           oid: order.oid,
-          uid: parseInt(userId),
+          uid: userId,
           rid: order.rid,
           did: order.did || null,
           restaurantRating,
