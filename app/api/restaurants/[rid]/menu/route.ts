@@ -33,17 +33,17 @@ export async function GET(
 
     const restaurant = restaurantResult.rows[0]
 
-    // 構建菜單查詢 - 使用正確的欄位名稱
+    // 構建菜單查詢 - 使用正確的欄位名稱 dishid
     let menuQuery = `
       SELECT 
-        mid,
-        name,
-        description,
-        price,
-        image,
-        category
-      FROM menu 
-      WHERE rid = $1
+        m.dishid,
+        m.name,
+        m.description,
+        m.price,
+        m.image,
+        m.category
+      FROM menu m 
+      WHERE m.rid = $1
     `
 
     const queryParams: any[] = [rid]
@@ -51,7 +51,7 @@ export async function GET(
 
     // 類別過濾
     if (category) {
-      menuQuery += ` AND LOWER(category) LIKE LOWER($${paramIndex})`
+      menuQuery += ` AND LOWER(m.category) LIKE LOWER($${paramIndex})`
       queryParams.push(`%${category}%`)
       paramIndex++
     }
@@ -59,15 +59,15 @@ export async function GET(
     // 搜尋過濾
     if (search) {
       menuQuery += ` AND (
-        LOWER(name) LIKE LOWER($${paramIndex}) OR 
-        LOWER(description) LIKE LOWER($${paramIndex}) OR
-        LOWER(category) LIKE LOWER($${paramIndex})
+        LOWER(m.name) LIKE LOWER($${paramIndex}) OR 
+        LOWER(m.description) LIKE LOWER($${paramIndex}) OR
+        LOWER(m.category) LIKE LOWER($${paramIndex})
       )`
       queryParams.push(`%${search}%`)
       paramIndex++
     }
 
-    menuQuery += ` ORDER BY category ASC, name ASC`
+    menuQuery += ` ORDER BY m.category ASC, m.name ASC`
 
     const menuResult = await pool.query(menuQuery, queryParams)
 
@@ -84,8 +84,8 @@ export async function GET(
       }
       
       menuByCategory[cat].push({
-        id: `${rid}-${item.mid}`,
-        dishId: item.mid,
+        id: `${rid}-${item.dishid}`,
+        dishId: item.dishid,
         name: item.name,
         description: item.description || '',
         price: parseFloat(item.price),

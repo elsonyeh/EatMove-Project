@@ -50,16 +50,16 @@ export async function POST(req: Request) {
       }, { status: 400 })
     }
 
-    // 檢查訂單是否存在且狀態為ready
+    // 檢查訂單是否存在且狀態為preparing或ready
     const orderCheck = await pool.query(
-      "SELECT oid, status FROM orders WHERE oid = $1 AND status = 'ready'",
+      "SELECT oid, status FROM orders WHERE oid = $1 AND status IN ('preparing', 'ready') AND did IS NULL",
       [oid]
     )
 
     if (orderCheck.rows.length === 0) {
       return NextResponse.json({ 
         success: false, 
-        message: "訂單不存在或狀態不正確" 
+        message: "訂單不存在、狀態不正確或已被其他外送員接單" 
       }, { status: 400 })
     }
 

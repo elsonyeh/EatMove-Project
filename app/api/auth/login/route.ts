@@ -5,36 +5,21 @@ export async function POST(req: Request) {
   try {
     const { username, password, role, faceDescriptor, plaintext } = await req.json();
 
-    // 加入詳細的請求參數日誌
-    console.log("=== 登入 API 請求參數 ===");
-    console.log("username:", username);
-    console.log("password:", password ? "***有密碼***" : "無密碼");
-    console.log("role:", role);
-    console.log("faceDescriptor:", faceDescriptor);
-    console.log("plaintext:", plaintext);
-    console.log("========================");
-
-    // 修正參數驗證邏輯：人臉辨識登入時不需要密碼
+    // 基本參數驗證
     if (!username || !role) {
-      console.log("❌ 參數驗證失敗 - 缺少必要欄位");
-      console.log("username 存在:", !!username);
-      console.log("role 存在:", !!role);
-      return NextResponse.json(
-        { success: false, message: "缺少必要欄位" },
-        { status: 400 }
-      );
+      return NextResponse.json({ 
+        success: false, 
+        message: "缺少必要欄位" 
+      }, { status: 400 })
     }
 
-    // 如果不是人臉辨識登入，則需要密碼
-    if (!faceDescriptor && !password) {
-      console.log("❌ 參數驗證失敗 - 既非人臉辨識也無密碼");
-      return NextResponse.json(
-        { success: false, message: "請提供密碼或使用人臉辨識" },
-        { status: 400 }
-      );
+    // 驗證登入方式：必須有密碼或人臉辨識
+    if (!password && !faceDescriptor) {
+      return NextResponse.json({ 
+        success: false, 
+        message: "請提供密碼或使用人臉辨識" 
+      }, { status: 400 })
     }
-
-    console.log("✅ 參數驗證通過");
 
     let result;
     
@@ -81,7 +66,6 @@ export async function POST(req: Request) {
         );
       }
       // 人臉辨識已在前端完成驗證，這裡直接通過
-      console.log("人臉辨識登入成功:", username);
     } else {
       // 密碼登入驗證
       if (!password) {
@@ -117,7 +101,6 @@ export async function POST(req: Request) {
       data: userData
     });
   } catch (error: any) {
-    console.error("登入失敗:", error);
     return NextResponse.json(
       { success: false, message: "登入失敗", error: error.message },
       { status: 500 }

@@ -56,7 +56,7 @@ export function DeliveryOrderCard({ order }: DeliveryOrderCardProps) {
                     : status === "accepted"
                       ? "secondary"
                       : status === "completed"
-                        ? "success"
+                        ? "outline"
                         : "destructive"
                 }
               >

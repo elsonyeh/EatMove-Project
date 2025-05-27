@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>修正外送員 localStorage</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+        }
+
+        .status {
+            padding: 15px;
+            margin: 10px 0;
+            border-radius: 5px;
+            border-left: 4px solid;
+        }
+
+        .success {
+            background-color: #d4edda;
+            border-color: #28a745;
+            color: #155724;
+        }
+
+        .warning {
+            background-color: #fff3cd;
+            border-color: #ffc107;
+            color: #856404;
+        }
+
+        .error {
+            background-color: #f8d7da;
+            border-color: #dc3545;
+            color: #721c24;
+        }
+
+        button {
+            background-color: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 5px;
+        }
+
+        button:hover {
+            background-color: #0056b3;
+        }
+
+        .danger {
+            background-color: #dc3545;
+        }
+
+        .danger:hover {
+            background-color: #c82333;
+        }
+
+        select {
+            padding: 8px;
+            margin: 5px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <h1>🚚 外送員 localStorage 修正工具</h1>
+
+        <div id="currentStatus"></div>
+
+        <h3>可用的外送員ID：</h3>
+        <div id="availableIds"></div>
+
+        <h3>操作：</h3>
+        <select id="userIdSelect">
+            <option value="">選擇外送員ID</option>
+        </select>
+        <button onclick="updateUserId()">更新 localStorage</button>
+        <button onclick="clearStorage()" class="danger">清除 localStorage</button>
+        <button onclick="checkStatus()">重新檢查</button>
+
+        <div id="result"></div>
+    </div>
+
+    <script>
+        // 可用的外送員資料
+        const availableDeliverymen = [
+            { did: 18, dname: 'elson', demail: 'elson921121@gmail.com' }
+        ];
+
+        function showStatus(message, type = 'success') {
+            const div = document.createElement('div');
+            div.className = `status ${type}`;
+            div.innerHTML = message;
+            return div;
+        }
+
+        function checkStatus() {
+            const currentUserId = localStorage.getItem('userId');
+            const statusDiv = document.getElementById('currentStatus');
+            const resultDiv = document.getElementById('result');
+
+            statusDiv.innerHTML = '';
+            resultDiv.innerHTML = '';
+
+            if (currentUserId) {
+                statusDiv.appendChild(showStatus(`📋 當前 localStorage userId: <strong>${currentUserId}</strong>`, 'warning'));
+
+                // 檢查是否為有效的外送員ID
+                const isValidDeliveryman = availableDeliverymen.some(d => d.did.toString() === currentUserId);
+
+                if (isValidDeliveryman) {
+                    const deliveryman = availableDeliverymen.find(d => d.did.toString() === currentUserId);
+                    statusDiv.appendChild(showStatus(`✅ 這是有效的外送員ID！外送員：${deliveryman.dname} (${deliveryman.demail})`, 'success'));
+                } else {
+                    statusDiv.appendChild(showStatus(`❌ 這不是有效的外送員ID`, 'error'));
+                }
+            } else {
+                statusDiv.appendChild(showStatus('❌ localStorage 中沒有 userId', 'error'));
+            }
+        }
+
+        function populateSelect() {
+            const select = document.getElementById('userIdSelect');
+            const availableDiv = document.getElementById('availableIds');
+
+            select.innerHTML = '<option value="">選擇外送員ID</option>';
+            availableDiv.innerHTML = '';
+
+            availableDeliverymen.forEach(deliveryman => {
+                // 添加到選擇框
+                const option = document.createElement('option');
+                option.value = deliveryman.did;
+                option.textContent = `${deliveryman.did} - ${deliveryman.dname} (${deliveryman.demail})`;
+                select.appendChild(option);
+
+                // 顯示可用ID
+                const div = document.createElement('div');
+                div.innerHTML = `<strong>ID: ${deliveryman.did}</strong> - ${deliveryman.dname} (${deliveryman.demail})`;
+                div.style.padding = '5px';
+                div.style.margin = '2px 0';
+                div.style.backgroundColor = '#f8f9fa';
+                div.style.borderRadius = '3px';
+                availableDiv.appendChild(div);
+            });
+        }
+
+        function updateUserId() {
+            const select = document.getElementById('userIdSelect');
+            const selectedId = select.value;
+            const resultDiv = document.getElementById('result');
+
+            if (!selectedId) {
+                resultDiv.innerHTML = '';
+                resultDiv.appendChild(showStatus('請選擇一個外送員ID', 'warning'));
+                return;
+            }
+
+            localStorage.setItem('userId', selectedId);
+
+            const deliveryman = availableDeliverymen.find(d => d.did.toString() === selectedId);
+            resultDiv.innerHTML = '';
+            resultDiv.appendChild(showStatus(`✅ localStorage 已更新！<br>新的 userId: <strong>${selectedId}</strong><br>外送員：${deliveryman.dname} (${deliveryman.demail})`, 'success'));
+
+            // 重新檢查狀態
+            setTimeout(checkStatus, 500);
+        }
+
+        function clearStorage() {
+            if (confirm('確定要清除 localStorage 嗎？這將登出所有用戶。')) {
+                localStorage.clear();
+                const resultDiv = document.getElementById('result');
+                resultDiv.innerHTML = '';
+                resultDiv.appendChild(showStatus('🗑️ localStorage 已清除', 'warning'));
+                setTimeout(checkStatus, 500);
+            }
+        }
+
+        // 初始化
+        window.onload = function () {
+            checkStatus();
+            populateSelect();
+        };
+    </script>
+</body>
+
+</html>

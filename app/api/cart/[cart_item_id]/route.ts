@@ -1,145 +1,86 @@
 import { NextResponse } from "next/server"
 import { pool } from "@/lib/db"
 
-// 更新購物車項目
-export async function PUT(
-  req: Request,
-  { params }: { params: Promise<{ cart_item_id: string }> }
-) {
+// 更新購物車項目數量
+export async function PUT(req: Request, { params }: { params: Promise<{ cart_item_id: string }> }) {
   try {
     const { cart_item_id: cartItemId } = await params
-    const body = await req.json()
-    const { quantity, specialInstructions } = body
+    const data = await req.json()
+    const { quantity, specialInstructions } = data
 
-    if (!cartItemId) {
+    if (!cartItemId || quantity === undefined) {
       return NextResponse.json({ 
         success: false, 
-        message: "缺少購物車項目ID" 
+        message: "缺少必要參數" 
       }, { status: 400 })
     }
 
-    if (quantity !== undefined && quantity <= 0) {
-      return NextResponse.json({ 
-        success: false, 
-        message: "數量必須大於0" 
-      }, { status: 400 })
-    }
+    console.log("🔄 更新購物車項目:", { cartItemId, quantity, specialInstructions })
 
-    let updateQuery = `UPDATE cart_items SET updated_at = CURRENT_TIMESTAMP`
-    const queryParams: any[] = []
-    let paramIndex = 1
-
-    if (quantity !== undefined) {
-      updateQuery += `, quantity = $${paramIndex}`
-      queryParams.push(quantity)
-      paramIndex++
-    }
-
-    if (specialInstructions !== undefined) {
-      updateQuery += `, special_instructions = $${paramIndex}`
-      queryParams.push(specialInstructions)
-      paramIndex++
-    }
-
-    updateQuery += ` WHERE cart_item_id = $${paramIndex} RETURNING *`
-    queryParams.push(cartItemId)
-
-    const result = await pool.query(updateQuery, queryParams)
-
-    if (result.rows.length === 0) {
-      return NextResponse.json({ 
-        success: false, 
-        message: "購物車項目不存在" 
-      }, { status: 404 })
-    }
-
-    // 更新購物車的更新時間
-    await pool.query(`
-      UPDATE cart 
-      SET updated_at = CURRENT_TIMESTAMP 
-      WHERE cart_id = (
-        SELECT cart_id FROM cart_items WHERE cart_item_id = $1
+    if (quantity <= 0) {
+      // 如果數量為0或負數，刪除項目
+      await pool.query(
+        `DELETE FROM cart_items WHERE cart_item_id = $1`,
+        [cartItemId]
       )
-    `, [cartItemId])
+      console.log("🗑️ 刪除購物車項目")
+    } else {
+      // 更新數量和備註
+      await pool.query(
+        `UPDATE cart_items 
+         SET quantity = $1, special_instructions = $2, updated_at = CURRENT_TIMESTAMP 
+         WHERE cart_item_id = $3`,
+        [quantity, specialInstructions || "", cartItemId]
+      )
+      console.log("✅ 更新購物車項目成功")
+    }
 
     return NextResponse.json({
       success: true,
-      message: "購物車項目更新成功",
-      item: result.rows[0]
+      message: quantity <= 0 ? "項目已刪除" : "項目已更新"
     })
 
   } catch (err: any) {
     console.error("❌ 更新購物車項目失敗：", err)
     return NextResponse.json({ 
       success: false, 
-      message: "更新購物車項目失敗", 
+      message: "更新失敗", 
       error: err.message 
     }, { status: 500 })
   }
 }
 
 // 刪除購物車項目
-export async function DELETE(
-  req: Request,
-  { params }: { params: Promise<{ cart_item_id: string }> }
-) {
+export async function DELETE(req: Request, { params }: { params: Promise<{ cart_item_id: string }> }) {
   try {
     const { cart_item_id: cartItemId } = await params
 
     if (!cartItemId) {
       return NextResponse.json({ 
         success: false, 
-        message: "缺少購物車項目ID" 
+        message: "缺少項目ID" 
       }, { status: 400 })
     }
 
-    // 獲取購物車ID（用於後續更新購物車時間）
-    const cartResult = await pool.query(`
-      SELECT cart_id FROM cart_items WHERE cart_item_id = $1
-    `, [cartItemId])
+    console.log("🗑️ 刪除購物車項目:", cartItemId)
 
-    if (cartResult.rows.length === 0) {
-      return NextResponse.json({ 
-        success: false, 
-        message: "購物車項目不存在" 
-      }, { status: 404 })
-    }
+    await pool.query(
+      `DELETE FROM cart_items WHERE cart_item_id = $1`,
+      [cartItemId]
+    )
 
-    const cartId = cartResult.rows[0].cart_id
-
-    // 刪除購物車項目
-    await pool.query(`
-      DELETE FROM cart_items WHERE cart_item_id = $1
-    `, [cartItemId])
-
-    // 更新購物車的更新時間
-    await pool.query(`
-      UPDATE cart 
-      SET updated_at = CURRENT_TIMESTAMP 
-      WHERE cart_id = $1
-    `, [cartId])
-
-    // 檢查購物車是否為空，如果為空則刪除購物車
-    const remainingItemsResult = await pool.query(`
-      SELECT COUNT(*) as count FROM cart_items WHERE cart_id = $1
-    `, [cartId])
-
-    if (parseInt(remainingItemsResult.rows[0].count) === 0) {
-      await pool.query(`
-        DELETE FROM cart WHERE cart_id = $1
-      `, [cartId])
-    }
+    console.log("✅ 購物車項目已刪除")
 
     return NextResponse.json({
       success: true,
-      message: "購物車項目已刪除"
+      message: "項目已刪除"
     })
 
   } catch (err: any) {
     console.error("❌ 刪除購物車項目失敗：", err)
     return NextResponse.json({ 
       success: false, 
-      message: "刪除購物車項目失敗", 
+      message: "刪除失敗", 
       error: err.message 
     }, { status: 500 })
   }

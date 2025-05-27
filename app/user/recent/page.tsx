@@ -14,10 +14,16 @@ export default function UserRecentPage() {
   const { recentViews, isLoaded: recentViewsLoaded } = useRecentViews()
   const { favorites, isLoaded: favoritesLoaded } = useFavorites()
   const [loading, setLoading] = useState(true)
+  const [isClient, setIsClient] = useState(false)
   const [searchQuery, setSearchQuery] = useState("")
 
+  // 確保只在客戶端渲染
   useEffect(() => {
-    if (recentViewsLoaded && favoritesLoaded) {
+    setIsClient(true)
+  }, [])
+
+  useEffect(() => {
+    if (isClient && recentViewsLoaded && favoritesLoaded) {
       // 模擬加載數據
       const timer = setTimeout(() => {
         setLoading(false)
@@ -25,16 +31,48 @@ export default function UserRecentPage() {
 
       return () => clearTimeout(timer)
     }
-  }, [recentViewsLoaded, favoritesLoaded])
+  }, [isClient, recentViewsLoaded, favoritesLoaded])
 
   // 過濾近期瀏覽的餐廳
   const filteredRecentViews = searchQuery
     ? recentViews.filter(
-        (restaurant) =>
-          restaurant.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          restaurant.cuisine.toLowerCase().includes(searchQuery.toLowerCase()),
-      )
+      (restaurant) =>
+        restaurant.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        restaurant.cuisine.toLowerCase().includes(searchQuery.toLowerCase()),
+    )
     : recentViews
+
+  // 在客戶端渲染之前顯示載入狀態
+  if (!isClient) {
+    return (
+      <div className="container py-6">
+        <div className="mb-8">
+          <div className="flex items-center mb-2">
+            <Clock className="h-6 w-6 text-brand-primary mr-2" />
+            <h1 className="text-3xl font-bold tracking-tight">近期瀏覽</h1>
+          </div>
+          <p className="text-muted-foreground">您最近瀏覽過的店家</p>
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
+          {Array(4)
+            .fill(0)
+            .map((_, i) => (
+              <div key={i} className="rounded-xl overflow-hidden">
+                <Skeleton className="h-48 w-full" />
+                <div className="p-4 space-y-3">
+                  <Skeleton className="h-6 w-3/4" />
+                  <Skeleton className="h-4 w-full" />
+                  <div className="flex gap-2">
+                    <Skeleton className="h-4 w-1/4" />
+                    <Skeleton className="h-4 w-1/4" />
+                  </div>
+                </div>
+              </div>
+            ))}
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="container py-6">
@@ -81,11 +119,12 @@ export default function UserRecentPage() {
         </div>
       ) : filteredRecentViews.length > 0 ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
-          {filteredRecentViews.map((restaurant) => (
+          {filteredRecentViews.map((restaurant, index) => (
             <RestaurantCard
-              key={restaurant.id}
+              key={`recent-${restaurant.id}-${index}`}
               restaurant={restaurant}
               isFavorite={favorites.some((fav) => fav.id === restaurant.id)}
+              priority={index < 4}
             />
           ))}
         </div>

@@ -14,9 +14,10 @@ import type { Restaurant } from "@/lib/data"
 interface RestaurantCardProps {
   restaurant: Restaurant
   isFavorite?: boolean
+  priority?: boolean
 }
 
-export function RestaurantCard({ restaurant, isFavorite: initialIsFavorite }: RestaurantCardProps) {
+export function RestaurantCard({ restaurant, isFavorite: initialIsFavorite, priority = false }: RestaurantCardProps) {
   const {
     id,
     name,
@@ -61,8 +62,12 @@ export function RestaurantCard({ restaurant, isFavorite: initialIsFavorite }: Re
             alt={name}
             fill
             className="object-cover transition-transform duration-500 group-hover:scale-105"
-            loading="lazy"
+            loading={priority ? "eager" : "lazy"}
+            priority={priority}
             sizes="(max-width: 640px) 100vw, (max-width: 768px) 50vw, (max-width: 1024px) 33vw, 25vw"
+            onLoad={() => {
+              // 圖片載入完成後的回調，確保圖片被實際使用
+            }}
           />
 
           {/* 收藏按鈕 */}

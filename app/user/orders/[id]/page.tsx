@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from "react"
 import { useParams, useRouter } from "next/navigation"
-import Image from "next/image"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -15,95 +14,98 @@ import { ChatBox } from "@/components/chat-box"
 import { DeliveryMap } from "@/components/delivery-map"
 import { Clock, CheckCircle, Truck, MapPin, ArrowLeft, Phone, MessageSquare, Star, Navigation } from "lucide-react"
 
+interface OrderItem {
+  item_id: number
+  dishid: number
+  menu_name: string
+  quantity: number
+  unit_price: number
+  subtotal: number
+  special_instructions?: string
+}
+
+interface Order {
+  oid: number
+  mid: string
+  rid: number
+  did?: number
+  delivery_address: string
+  total_amount: number
+  delivery_fee: number
+  status: string
+  order_time: string
+  estimated_delivery_time: string
+  actual_delivery_time?: string
+  notes?: string
+  payment_method: string
+  restaurant_name: string
+  restaurant_image?: string
+  restaurant_phone?: string
+  restaurant_address?: string
+  member_name: string
+  member_phone?: string
+  delivery_name?: string
+  delivery_phone?: string
+  items: OrderItem[]
+}
+
 export default function OrderDetailPage() {
-  const { id } = useParams()
+  const params = useParams()
+  const id = params?.id as string
   const router = useRouter()
   const { toast } = useToast()
-  const [orderStatus, setOrderStatus] = useState("pending") // 訂單狀態：pending, preparing, delivering, delivered
+  const [order, setOrder] = useState<Order | null>(null)
+  const [loading, setLoading] = useState(true)
   const [showRatingDialog, setShowRatingDialog] = useState(false)
   const [activeTab, setActiveTab] = useState("status")
-  const [orderItems] = useState([
-    {
-      id: "item-1",
-      name: "北京烤鴨",
-      price: 580,
-      quantity: 1,
-      image: "/placeholder.svg?height=64&width=64&text=北京烤鴨",
-    },
-    {
-      id: "item-2",
-      name: "宮保雞丁",
-      price: 220,
-      quantity: 1,
-      image: "/placeholder.svg?height=64&width=64&text=宮保雞丁",
-    },
-  ])
-
-  // 外送員資訊
-  const [deliveryPerson, setDeliveryPerson] = useState({
-    name: "李小明",
-    avatar: "/placeholder.svg?height=128&width=128&text=李小明",
-    rating: 4.8,
-    vehicle: "機車",
-    licensePlate: "ABC-1234",
-    phone: "0912-345-678",
-    estimatedArrival: "12:45 - 13:00",
-    isVisible: false,
-  })
-
-  // 計算訂單金額
-  const subtotal = orderItems.reduce((sum, item) => sum + item.price * item.quantity, 0)
-  const deliveryFee = 60
-  const total = subtotal + deliveryFee
 
   useEffect(() => {
-    // 模擬訂單狀態變化
-    const timer1 = setTimeout(() => {
-      setOrderStatus("preparing")
-      toast({
-        title: "訂單狀態更新",
-        description: "餐廳已接受您的訂單，正在準備中",
-      })
-    }, 5000) // 5秒後變為準備中
-
-    const timer2 = setTimeout(() => {
-      setOrderStatus("delivering")
-      toast({
-        title: "訂單狀態更新",
-        description: "外送員已取餐，正在前往您的位置",
-      })
-      // 顯示外送員資訊
-      setDeliveryPerson((prev) => ({ ...prev, isVisible: true }))
-      // 切換到地圖標籤
-      setActiveTab("map")
-    }, 10000) // 10秒後變為外送中
-
-    const timer3 = setTimeout(() => {
-      setOrderStatus("delivered")
-      toast({
-        title: "訂單已送達",
-        description: "感謝您的訂購，請為本次服務評分",
-      })
-      setShowRatingDialog(true)
-    }, 15000) // 15秒後變為已送達
-
-    return () => {
-      clearTimeout(timer1)
-      clearTimeout(timer2)
-      clearTimeout(timer3)
+    if (id) {
+      fetchOrderDetails()
     }
-  }, [toast])
+  }, [id])
+
+  const fetchOrderDetails = async () => {
+    try {
+      const response = await fetch(`/api/orders/${id}`)
+      const result = await response.json()
+
+      if (result.success) {
+        setOrder(result.order)
+      } else {
+        toast({
+          title: "錯誤",
+          description: result.message || "獲取訂單詳情失敗",
+          variant: "destructive",
+        })
+        router.push("/user/orders")
+      }
+    } catch (error) {
+      console.error("獲取訂單詳情失敗:", error)
+      toast({
+        title: "錯誤",
+        description: "網路錯誤，請稍後再試",
+        variant: "destructive",
+      })
+      router.push("/user/orders")
+    } finally {
+      setLoading(false)
+    }
+  }
 
   // 根據訂單狀態獲取進度
   const getOrderProgress = () => {
-    switch (orderStatus) {
+    if (!order) return 0
+    switch (order.status) {
       case "pending":
         return 25
+      case "accepted":
       case "preparing":
         return 50
+      case "ready":
       case "delivering":
         return 75
-      case "delivered":
+      case "completed":
         return 100
       default:
         return 0
@@ -112,7 +114,9 @@ export default function OrderDetailPage() {
 
   // 根據訂單狀態獲取狀態標籤
   const getStatusBadge = () => {
-    switch (orderStatus) {
+    if (!order) return <Badge>載入中...</Badge>
+
+    switch (order.status) {
       case "pending":
         return (
           <Badge variant="secondary" className="bg-brand-primary/20 text-brand-primary">
@@ -120,11 +124,19 @@ export default function OrderDetailPage() {
             訂單處理中
           </Badge>
         )
+      case "accepted":
       case "preparing":
         return (
           <Badge variant="secondary" className="bg-brand-secondary/20 text-brand-secondary">
             <Clock className="mr-1 h-3 w-3" />
             餐點準備中
+          </Badge>
+        )
+      case "ready":
+        return (
+          <Badge variant="secondary" className="bg-blue-100 text-blue-700">
+            <CheckCircle className="mr-1 h-3 w-3" />
+            餐點已準備完成
           </Badge>
         )
       case "delivering":
@@ -134,16 +146,57 @@ export default function OrderDetailPage() {
             外送中
           </Badge>
         )
-      case "delivered":
+      case "completed":
         return (
           <Badge variant="secondary" className="bg-green-100 text-green-700">
             <CheckCircle className="mr-1 h-3 w-3" />
             已送達
           </Badge>
         )
+      case "cancelled":
+        return (
+          <Badge variant="secondary" className="bg-red-100 text-red-700">
+            已取消
+          </Badge>
+        )
       default:
         return <Badge>未知狀態</Badge>
     }
+  }
+
+  const formatTime = (timeString: string) => {
+    return new Date(timeString).toLocaleString('zh-TW')
+  }
+
+  const formatCurrency = (amount: number) => {
+    return new Intl.NumberFormat('zh-TW', {
+      style: 'currency',
+      currency: 'TWD',
+      minimumFractionDigits: 0,
+    }).format(amount)
+  }
+
+  if (loading) {
+    return (
+      <div className="container py-6">
+        <div className="flex items-center justify-center min-h-screen">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-brand-primary"></div>
+          <span className="ml-2">載入中...</span>
+        </div>
+      </div>
+    )
+  }
+
+  if (!order) {
+    return (
+      <div className="container py-6">
+        <div className="text-center py-12">
+          <h2 className="text-xl font-medium mb-2">訂單不存在</h2>
+          <p className="text-muted-foreground mb-4">找不到指定的訂單</p>
+          <Button onClick={() => router.push("/user/orders")}>返回訂單列表</Button>
+        </div>
+      </div>
+    )
   }
 
   return (
@@ -155,45 +208,47 @@ export default function OrderDetailPage() {
         </Button>
         <h1 className="text-3xl font-bold tracking-tight mb-2">訂單詳情</h1>
         <div className="flex items-center">
-          <p className="text-muted-foreground mr-2">訂單編號: #{id}</p>
+          <p className="text-muted-foreground mr-2">訂單編號: #{order.oid}</p>
           {getStatusBadge()}
         </div>
       </div>
 
-      {/* 外送員資訊卡片 - 僅在外送中或已送達時顯示 */}
-      {deliveryPerson.isVisible && (
+      {/* 外送員資訊卡片 - 僅在有外送員時顯示 */}
+      {order.delivery_name && (order.status === "delivering" || order.status === "completed") && (
         <Card className="mb-6 border-brand-primary/20 bg-gradient-to-r from-brand-primary/5 to-transparent">
           <CardContent className="p-6">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-4">
                 <Avatar className="h-16 w-16 border-2 border-brand-primary/20">
-                  <AvatarImage src={deliveryPerson.avatar || "/placeholder.svg"} alt={deliveryPerson.name} />
                   <AvatarFallback className="bg-brand-primary/10 text-brand-primary text-xl">
-                    {deliveryPerson.name.charAt(0)}
+                    {order.delivery_name.charAt(0)}
                   </AvatarFallback>
                 </Avatar>
                 <div>
-                  <h3 className="text-lg font-bold">{deliveryPerson.name}</h3>
+                  <h3 className="text-lg font-bold">{order.delivery_name}</h3>
                   <div className="flex items-center text-sm text-muted-foreground">
-                    <Star className="h-4 w-4 text-yellow-500 fill-yellow-500 mr-1" />
-                    <span>{deliveryPerson.rating}</span>
-                    <span className="mx-2">•</span>
-                    <span>{deliveryPerson.vehicle}</span>
-                    <span className="mx-2">•</span>
-                    <span>{deliveryPerson.licensePlate}</span>
+                    <span>外送員</span>
+                    {order.delivery_phone && (
+                      <>
+                        <span className="mx-2">•</span>
+                        <span>{order.delivery_phone}</span>
+                      </>
+                    )}
                   </div>
-                  {orderStatus === "delivering" && (
+                  {order.status === "delivering" && (
                     <p className="text-sm mt-1 text-brand-primary font-medium">
-                      預計 {deliveryPerson.estimatedArrival} 送達
+                      預計 {formatTime(order.estimated_delivery_time)} 送達
                     </p>
                   )}
                 </div>
               </div>
               <div className="flex gap-2">
-                <Button variant="outline" size="icon" className="rounded-full h-10 w-10">
-                  <Phone className="h-5 w-5 text-brand-primary" />
-                  <span className="sr-only">撥打電話</span>
-                </Button>
+                {order.delivery_phone && (
+                  <Button variant="outline" size="icon" className="rounded-full h-10 w-10">
+                    <Phone className="h-5 w-5 text-brand-primary" />
+                    <span className="sr-only">撥打電話</span>
+                  </Button>
+                )}
                 <Button
                   variant="outline"
                   size="icon"
@@ -238,9 +293,10 @@ export default function OrderDetailPage() {
                     <div className="grid grid-cols-4 gap-2">
                       <div className="text-center">
                         <div
-                          className={`mx-auto w-10 h-10 rounded-full flex items-center justify-center mb-2 ${
-                            orderStatus ? "bg-brand-primary text-white" : "bg-gray-200 text-gray-500"
-                          }`}
+                          className={`mx-auto w-10 h-10 rounded-full flex items-center justify-center mb-2 ${["pending", "accepted", "preparing", "ready", "delivering", "completed"].includes(order.status)
+                            ? "bg-brand-primary text-white"
+                            : "bg-gray-200 text-gray-500"
+                            }`}
                         >
                           <Clock className="h-5 w-5" />
                         </div>
@@ -248,11 +304,10 @@ export default function OrderDetailPage() {
                       </div>
                       <div className="text-center">
                         <div
-                          className={`mx-auto w-10 h-10 rounded-full flex items-center justify-center mb-2 ${
-                            orderStatus === "preparing" || orderStatus === "delivering" || orderStatus === "delivered"
-                              ? "bg-brand-primary text-white"
-                              : "bg-gray-200 text-gray-500"
-                          }`}
+                          className={`mx-auto w-10 h-10 rounded-full flex items-center justify-center mb-2 ${["accepted", "preparing", "ready", "delivering", "completed"].includes(order.status)
+                            ? "bg-brand-primary text-white"
+                            : "bg-gray-200 text-gray-500"
+                            }`}
                         >
                           <CheckCircle className="h-5 w-5" />
                         </div>
@@ -260,11 +315,10 @@ export default function OrderDetailPage() {
                       </div>
                       <div className="text-center">
                         <div
-                          className={`mx-auto w-10 h-10 rounded-full flex items-center justify-center mb-2 ${
-                            orderStatus === "delivering" || orderStatus === "delivered"
-                              ? "bg-brand-primary text-white"
-                              : "bg-gray-200 text-gray-500"
-                          }`}
+                          className={`mx-auto w-10 h-10 rounded-full flex items-center justify-center mb-2 ${["delivering", "completed"].includes(order.status)
+                            ? "bg-brand-primary text-white"
+                            : "bg-gray-200 text-gray-500"
+                            }`}
                         >
                           <Truck className="h-5 w-5" />
                         </div>
@@ -272,9 +326,10 @@ export default function OrderDetailPage() {
                       </div>
                       <div className="text-center">
                         <div
-                          className={`mx-auto w-10 h-10 rounded-full flex items-center justify-center mb-2 ${
-                            orderStatus === "delivered" ? "bg-brand-primary text-white" : "bg-gray-200 text-gray-500"
-                          }`}
+                          className={`mx-auto w-10 h-10 rounded-full flex items-center justify-center mb-2 ${order.status === "completed"
+                            ? "bg-brand-primary text-white"
+                            : "bg-gray-200 text-gray-500"
+                            }`}
                         >
                           <CheckCircle className="h-5 w-5" />
                         </div>
@@ -284,8 +339,17 @@ export default function OrderDetailPage() {
 
                     {/* 預計送達時間 */}
                     <div className="bg-muted/30 p-4 rounded-lg">
-                      <h3 className="font-medium mb-2">預計送達時間</h3>
-                      <p className="text-2xl font-bold">{orderStatus === "delivered" ? "已送達" : "12:45 - 13:00"}</p>
+                      <h3 className="font-medium mb-2">
+                        {order.status === "completed" ? "實際送達時間" : "預計送達時間"}
+                      </h3>
+                      <p className="text-2xl font-bold">
+                        {order.status === "completed" && order.actual_delivery_time
+                          ? formatTime(order.actual_delivery_time)
+                          : order.status === "completed"
+                            ? "已送達"
+                            : formatTime(order.estimated_delivery_time)
+                        }
+                      </p>
                     </div>
 
                     {/* 配送地址 */}
@@ -293,8 +357,34 @@ export default function OrderDetailPage() {
                       <h3 className="font-medium mb-2">配送地址</h3>
                       <div className="flex items-start">
                         <MapPin className="h-5 w-5 mr-2 mt-0.5 text-muted-foreground" />
-                        <p>台北市信義區信義路五段7號</p>
+                        <p>{order.delivery_address}</p>
                       </div>
+                    </div>
+
+                    {/* 餐廳資訊 */}
+                    <div>
+                      <h3 className="font-medium mb-2">餐廳資訊</h3>
+                      <div className="space-y-2">
+                        <p className="font-medium">{order.restaurant_name}</p>
+                        {order.restaurant_address && (
+                          <div className="flex items-start">
+                            <MapPin className="h-4 w-4 mr-2 mt-0.5 text-muted-foreground" />
+                            <p className="text-sm text-muted-foreground">{order.restaurant_address}</p>
+                          </div>
+                        )}
+                        {order.restaurant_phone && (
+                          <div className="flex items-center">
+                            <Phone className="h-4 w-4 mr-2 text-muted-foreground" />
+                            <p className="text-sm text-muted-foreground">{order.restaurant_phone}</p>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* 訂單時間 */}
+                    <div>
+                      <h3 className="font-medium mb-2">訂單時間</h3>
+                      <p className="text-sm text-muted-foreground">{formatTime(order.order_time)}</p>
                     </div>
                   </div>
                 </CardContent>
@@ -306,24 +396,38 @@ export default function OrderDetailPage() {
                 <CardHeader>
                   <CardTitle>即時位置追蹤</CardTitle>
                   <CardDescription>
-                    {orderStatus === "delivering"
+                    {order.status === "delivering"
                       ? "外送員正在前往您的位置"
-                      : orderStatus === "delivered"
+                      : order.status === "completed"
                         ? "訂單已送達"
                         : "訂單準備中"}
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
-                  <DeliveryMap status={orderStatus} />
+                  <DeliveryMap
+                    status={order.status}
+                    restaurantAddress={order.restaurant_address}
+                    deliveryAddress={order.delivery_address}
+                    deliverymanName={order.delivery_name}
+                    deliverymanPhone={order.delivery_phone}
+                    estimatedTime={order.status === "delivering" ? formatTime(order.estimated_delivery_time) : undefined}
+                  />
 
-                  {orderStatus === "delivering" && (
+                  {order.status === "delivering" && (
                     <div className="mt-4 p-4 bg-brand-primary/10 rounded-lg">
                       <div className="flex items-center justify-between">
                         <div>
                           <h3 className="font-medium">預計送達時間</h3>
-                          <p className="text-xl font-bold">{deliveryPerson.estimatedArrival}</p>
+                          <p className="text-xl font-bold">{formatTime(order.estimated_delivery_time)}</p>
                         </div>
-                        <Button className="bg-brand-primary hover:bg-brand-primary/90">
+                        <Button
+                          className="bg-brand-primary hover:bg-brand-primary/90"
+                          onClick={() => {
+                            const restaurantAddr = order.restaurant_address || "餐廳地址"
+                            const deliveryAddr = order.delivery_address || "配送地址"
+                            window.open(`https://www.google.com/maps/dir/${encodeURIComponent(restaurantAddr)}/${encodeURIComponent(deliveryAddr)}`, '_blank')
+                          }}
+                        >
                           <Navigation className="mr-2 h-4 w-4" />
                           開啟導航
                         </Button>
@@ -339,11 +443,11 @@ export default function OrderDetailPage() {
                 <CardHeader>
                   <CardTitle>與外送員聊天</CardTitle>
                   <CardDescription>
-                    {deliveryPerson.isVisible ? `與 ${deliveryPerson.name} 聯絡` : "外送員尚未指派"}
+                    {order.delivery_name ? `與 ${order.delivery_name} 聯絡` : "外送員尚未指派"}
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
-                  {deliveryPerson.isVisible ? (
+                  {order.delivery_name ? (
                     <ChatBox />
                   ) : (
                     <div className="text-center py-12">
@@ -360,20 +464,20 @@ export default function OrderDetailPage() {
               <CardTitle>訂單內容</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              {orderItems.map((item) => (
-                <div key={item.id} className="flex items-center space-x-4">
-                  <div className="relative h-16 w-16 overflow-hidden rounded-md">
-                    <Image src={item.image || "/placeholder.svg"} alt={item.name} fill className="object-cover" />
-                  </div>
+              {order.items.map((item) => (
+                <div key={item.item_id} className="flex items-center justify-between">
                   <div className="flex-1">
-                    <h3 className="font-medium">{item.name}</h3>
-                    <p className="text-sm text-muted-foreground">京華樓</p>
+                    <h3 className="font-medium">{item.menu_name}</h3>
+                    <p className="text-sm text-muted-foreground">{order.restaurant_name}</p>
+                    {item.special_instructions && (
+                      <p className="text-sm text-muted-foreground">備註：{item.special_instructions}</p>
+                    )}
                   </div>
                   <div className="text-right">
                     <div className="font-medium">
-                      ${item.price} x {item.quantity}
+                      {formatCurrency(item.unit_price)} x {item.quantity}
                     </div>
-                    <div className="text-muted-foreground">${item.price * item.quantity}</div>
+                    <div className="text-muted-foreground">{formatCurrency(item.subtotal)}</div>
                   </div>
                 </div>
               ))}
@@ -389,20 +493,29 @@ export default function OrderDetailPage() {
             <CardContent className="space-y-4">
               <div className="flex justify-between">
                 <span>小計</span>
-                <span>${subtotal}</span>
+                <span>{formatCurrency(order.total_amount - order.delivery_fee)}</span>
               </div>
               <div className="flex justify-between">
                 <span>外送費</span>
-                <span>${deliveryFee}</span>
+                <span>{formatCurrency(order.delivery_fee)}</span>
               </div>
               <Separator />
               <div className="flex justify-between font-medium">
                 <span>總計</span>
-                <span>${total}</span>
+                <span>{formatCurrency(order.total_amount)}</span>
               </div>
+              <div className="text-sm text-muted-foreground">
+                付款方式：{order.payment_method === 'cash' ? '現金付款' : order.payment_method}
+              </div>
+              {order.notes && (
+                <div className="text-sm">
+                  <span className="font-medium">備註：</span>
+                  <span className="text-muted-foreground">{order.notes}</span>
+                </div>
+              )}
             </CardContent>
             <CardFooter className="flex flex-col gap-2">
-              {orderStatus === "delivered" ? (
+              {order.status === "completed" ? (
                 <Button className="w-full" onClick={() => setShowRatingDialog(true)}>
                   評分訂單
                 </Button>
@@ -412,7 +525,7 @@ export default function OrderDetailPage() {
                 </Button>
               )}
 
-              {deliveryPerson.isVisible && (
+              {order.delivery_name && order.delivery_phone && (
                 <div className="w-full grid grid-cols-2 gap-2">
                   <Button variant="outline" className="w-full">
                     <Phone className="mr-2 h-4 w-4" />
@@ -429,7 +542,12 @@ export default function OrderDetailPage() {
         </div>
       </div>
 
-      <RatingDialog open={showRatingDialog} onOpenChange={setShowRatingDialog} />
+      <RatingDialog
+        open={showRatingDialog}
+        onOpenChange={setShowRatingDialog}
+        order={order ? { oid: order.oid, rid: order.rid, did: order.did } : undefined}
+        userId={typeof window !== 'undefined' ? localStorage.getItem('userId') || '1' : '1'}
+      />
     </div>
   )
 }

@@ -7,6 +7,6 @@ export async function GET() {
     return NextResponse.json({ success: true, now: result.rows[0] });
   } catch (err) {
     console.error("❌ 資料庫連線失敗", err);
-    return NextResponse.json({ success: false, message: "連線錯誤" }, { st 500 });
+    return NextResponse.json({ success: false, message: "連線錯誤" }, { status: 500 });
   }
 }

@@ -13,15 +13,24 @@ import { DeliveryMap } from "@/components/delivery-map"
 import { ChatBox } from "@/components/chat-box"
 import { useToast } from "@/components/ui/use-toast"
 import { deliveryOrders } from "@/lib/data"
+import React from "react"
 
-export default function DeliveryOrderDetailPage({ params }: { params: { id: string } }) {
+export default function DeliveryOrderDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const router = useRouter()
   const { toast } = useToast()
   const [orderStatus, setOrderStatus] = useState("accepted") // accepted, picked, delivered
   const [activeTab, setActiveTab] = useState("details")
+  const [orderId, setOrderId] = useState<string>("")
+
+  // 解析 params
+  React.useEffect(() => {
+    params.then(({ id }) => {
+      setOrderId(id)
+    })
+  }, [params])
 
   // 找到對應的訂單
-  const order = deliveryOrders.find((o) => o.id === params.id) || deliveryOrders[0]
+  const order = deliveryOrders.find((o) => o.id === orderId) || deliveryOrders[0]
 
   const handlePickupOrder = () => {
     setOrderStatus("picked")
@@ -49,11 +58,11 @@ export default function DeliveryOrderDetailPage({ params }: { params: { id: stri
   return (
     <div className="container py-6">
       <div className="mb-8">
-        <h1 className="text-3xl font-bold tracking-tight mb-2">訂單 #{params.id}</h1>
+        <h1 className="text-3xl font-bold tracking-tight mb-2">訂單 #{orderId}</h1>
         <div className="flex items-center">
           <p className="text-muted-foreground">訂單狀態：</p>
           <Badge
-            variant={orderStatus === "accepted" ? "default" : orderStatus === "picked" ? "secondary" : "success"}
+            variant={orderStatus === "accepted" ? "default" : orderStatus === "picked" ? "secondary" : "outline"}
             className="ml-2"
           >
             {orderStatus === "accepted" ? "已接單" : orderStatus === "picked" ? "已取餐" : "已送達"}
@@ -88,7 +97,7 @@ export default function DeliveryOrderDetailPage({ params }: { params: { id: stri
                       </div>
                       <div className="flex-1">
                         <h3 className="font-medium">{item.name}</h3>
-                        <p className="text-sm text-muted-foreground">{item.restaurant}</p>
+                        <p className="text-sm text-muted-foreground">{order.restaurant}</p>
                       </div>
                       <div className="text-right">
                         <div className="font-medium">

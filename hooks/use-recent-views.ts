@@ -12,7 +12,11 @@ export function useRecentViews() {
   const [isLoaded, setIsLoaded] = useState(false)
 
   useEffect(() => {
-    setIsLoaded(true)
+    // 等待 localStorage 初始化完成
+    const timer = setTimeout(() => {
+      setIsLoaded(true)
+    }, 100)
+    return () => clearTimeout(timer)
   }, [])
 
   // 添加店家到近期瀏覽

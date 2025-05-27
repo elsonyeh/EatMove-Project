@@ -45,17 +45,37 @@ export default function RestaurantOrdersPage() {
     const [loading, setLoading] = useState(true)
     const [selectedOrder, setSelectedOrder] = useState<Order | null>(null)
     const [rejectReason, setRejectReason] = useState("")
+    const [restaurantId, setRestaurantId] = useState<string>("")
     const { toast } = useToast()
 
-    // 獲取餐廳ID（實際應該從登入狀態獲取）
-    const restaurantId = localStorage.getItem('restaurantId') || '1'
+    // 獲取餐廳ID
+    useEffect(() => {
+        if (typeof window !== 'undefined') {
+            // 從 restaurantAccount 獲取餐廳資訊
+            const restaurantAccountStr = localStorage.getItem("restaurantAccount")
+            if (restaurantAccountStr) {
+                try {
+                    const restaurantAccount = JSON.parse(restaurantAccountStr)
+                    const id = restaurantAccount.restaurantId?.toString() || '1'
+                    setRestaurantId(id)
+                } catch (error) {
+                    console.error("解析餐廳帳號資料失敗:", error)
+                    setRestaurantId('1')
+                }
+            } else {
+                setRestaurantId('1')
+            }
+        }
+    }, [])
 
     useEffect(() => {
-        fetchOrders()
-        // 每30秒刷新一次訂單
-        const interval = setInterval(fetchOrders, 30000)
-        return () => clearInterval(interval)
-    }, [])
+        if (restaurantId) {
+            fetchOrders()
+            // 每30秒刷新一次訂單
+            const interval = setInterval(fetchOrders, 30000)
+            return () => clearInterval(interval)
+        }
+    }, [restaurantId])
 
     const fetchOrders = async () => {
         try {

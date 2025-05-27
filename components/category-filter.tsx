@@ -11,10 +11,32 @@ export interface CategoryFilterProps {
 
 export function CategoryFilter({ activeCategory = "all", onCategoryChange }: CategoryFilterProps) {
   const [active, setActive] = useState(activeCategory)
+  const [availableCategories, setAvailableCategories] = useState<string[]>([])
+  const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     setActive(activeCategory)
   }, [activeCategory])
+
+  // 獲取可用的料理類型
+  useEffect(() => {
+    const fetchAvailableCategories = async () => {
+      try {
+        const response = await fetch('/api/restaurants?getCategories=true')
+        const data = await response.json()
+
+        if (data.success) {
+          setAvailableCategories(data.categories)
+        }
+      } catch (error) {
+        console.error('獲取料理類型失敗:', error)
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    fetchAvailableCategories()
+  }, [])
 
   const handleCategoryChange = (categoryId: string, categoryName: string) => {
     setActive(categoryId)
@@ -23,18 +45,34 @@ export function CategoryFilter({ activeCategory = "all", onCategoryChange }: Cat
     }
   }
 
+  // 料理類型對應的圖標和ID映射
+  const cuisineIconMap: { [key: string]: { icon: any, id: string } } = {
+    "中式料理": { icon: Soup, id: "chinese" },
+    "日式料理": { icon: Beef, id: "japanese" },
+    "韓式料理": { icon: Drumstick, id: "korean" },
+    "義式料理": { icon: Pizza, id: "italian" },
+    "美式料理": { icon: Sandwich, id: "american" },
+    "南洋料理": { icon: Salad, id: "thai" },
+    "素食": { icon: Salad, id: "vegetarian" },
+    "甜點": { icon: Cake, id: "dessert" },
+    "飲料": { icon: Coffee, id: "beverage" },
+  }
+
+  // 構建動態類別列表
   const categories = [
     { id: "all", name: "全部", icon: Utensils },
-    { id: "chinese", name: "中式料理", icon: Soup },
-    { id: "japanese", name: "日式料理", icon: Beef },
-    { id: "korean", name: "韓式料理", icon: Drumstick },
-    { id: "italian", name: "義式料理", icon: Pizza },
-    { id: "american", name: "美式料理", icon: Sandwich },
-    { id: "thai", name: "泰式料理", icon: Salad },
-    { id: "vegetarian", name: "素食", icon: Salad },
-    { id: "dessert", name: "甜點", icon: Cake },
-    { id: "beverage", name: "飲料", icon: Coffee },
+    ...availableCategories.map(cuisine => ({
+      id: cuisineIconMap[cuisine]?.id || cuisine.toLowerCase(),
+      name: cuisine,
+      icon: cuisineIconMap[cuisine]?.icon || Utensils
+    }))
   ]
+
+  if (loading) {
+    return (
+      <div className="w-full h-12 bg-gray-100 rounded-lg animate-pulse"></div>
+    )
+  }
 
   return (
     <ScrollArea className="w-full whitespace-nowrap pb-2">

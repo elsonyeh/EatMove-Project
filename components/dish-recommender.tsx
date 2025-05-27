@@ -25,7 +25,7 @@ export function DishRecommender({ restaurantName, cuisine, menu }: DishRecommend
       韓式料理: `${popularItems}是${restaurantName}的招牌菜品，道地${cuisine}風味，香辣可口。`,
       義式料理: `${restaurantName}的${popularItems}使用進口食材製作，正宗${cuisine}風味。`,
       美式料理: `${popularItems}是${restaurantName}的熱門選擇，道地${cuisine}風味，份量十足。`,
-      泰式料理: `推薦您嘗試${restaurantName}的${popularItems}，酸辣可口的${cuisine}風味。`,
+      南洋料理: `推薦您嘗試${restaurantName}的${popularItems}，酸辣可口的${cuisine}風味。`,
       素食: `${restaurantName}的${popularItems}採用新鮮有機食材，健康美味的${cuisine}選擇。`,
       甜點: `${restaurantName}的${popularItems}是甜點愛好者的最愛，精緻可口。`,
       飲料: `${restaurantName}的${popularItems}是解渴首選，清爽可口。`,

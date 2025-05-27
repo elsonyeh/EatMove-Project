@@ -11,7 +11,7 @@ import { useToast } from "@/components/ui/use-toast"
 import { Minus, Plus, ShoppingCart, Trash2 } from "lucide-react"
 
 interface CartItem {
-    mid: number
+    dishId: number
     name: string
     price: number
     quantity: number
@@ -37,34 +37,51 @@ const Cart = forwardRef<CartRef, CartProps>(({ restaurantId, restaurantName, min
     const [deliveryAddress, setDeliveryAddress] = useState("")
     const [orderNotes, setOrderNotes] = useState("")
     const [isSubmitting, setIsSubmitting] = useState(false)
+    const [isInitialized, setIsInitialized] = useState(false)
     const { toast } = useToast()
 
     // 從localStorage載入購物車
     useEffect(() => {
         const savedCart = localStorage.getItem(`cart_${restaurantId}`)
+        console.log(`🛒 載入購物車 (餐廳${restaurantId}):`, savedCart)
         if (savedCart) {
-            setCartItems(JSON.parse(savedCart))
+            try {
+                const parsedCart = JSON.parse(savedCart)
+                setCartItems(parsedCart)
+                console.log(`✅ 購物車載入成功:`, parsedCart)
+            } catch (error) {
+                console.error(`❌ 購物車載入失敗:`, error)
+            }
         }
+        setIsInitialized(true)
     }, [restaurantId])
 
-    // 儲存購物車到localStorage
+    // 儲存購物車到localStorage（只有在初始化完成後才儲存）
     useEffect(() => {
-        localStorage.setItem(`cart_${restaurantId}`, JSON.stringify(cartItems))
-    }, [cartItems, restaurantId])
+        if (isInitialized) {
+            localStorage.setItem(`cart_${restaurantId}`, JSON.stringify(cartItems))
+            console.log(`💾 購物車已儲存 (餐廳${restaurantId}):`, cartItems)
+        }
+    }, [cartItems, restaurantId, isInitialized])
 
     // 添加商品到購物車
     const addToCart = (item: Omit<CartItem, 'quantity'>) => {
+        console.log(`🛒 添加商品到購物車:`, item)
         setCartItems(prev => {
-            const existingItem = prev.find(cartItem => cartItem.mid === item.mid)
+            const existingItem = prev.find(cartItem => cartItem.dishId === item.dishId)
+            let newCartItems
             if (existingItem) {
-                return prev.map(cartItem =>
-                    cartItem.mid === item.mid
+                newCartItems = prev.map(cartItem =>
+                    cartItem.dishId === item.dishId
                         ? { ...cartItem, quantity: cartItem.quantity + 1 }
                         : cartItem
                 )
+                console.log(`📈 商品數量增加:`, newCartItems)
             } else {
-                return [...prev, { ...item, quantity: 1 }]
+                newCartItems = [...prev, { ...item, quantity: 1 }]
+                console.log(`➕ 新增商品:`, newCartItems)
             }
+            return newCartItems
         })
         toast({
             title: "已加入購物車",
@@ -78,28 +95,28 @@ const Cart = forwardRef<CartRef, CartProps>(({ restaurantId, restaurantName, min
     }))
 
     // 更新商品數量
-    const updateQuantity = (mid: number, newQuantity: number) => {
+    const updateQuantity = (dishId: number, newQuantity: number) => {
         if (newQuantity <= 0) {
-            removeFromCart(mid)
+            removeFromCart(dishId)
             return
         }
         setCartItems(prev =>
             prev.map(item =>
-                item.mid === mid ? { ...item, quantity: newQuantity } : item
+                item.dishId === dishId ? { ...item, quantity: newQuantity } : item
             )
         )
     }
 
     // 移除商品
-    const removeFromCart = (mid: number) => {
-        setCartItems(prev => prev.filter(item => item.mid !== mid))
+    const removeFromCart = (dishId: number) => {
+        setCartItems(prev => prev.filter(item => item.dishId !== dishId))
     }
 
     // 更新特殊要求
-    const updateSpecialInstructions = (mid: number, instructions: string) => {
+    const updateSpecialInstructions = (dishId: number, instructions: string) => {
         setCartItems(prev =>
             prev.map(item =>
-                item.mid === mid ? { ...item, specialInstructions: instructions } : item
+                item.dishId === dishId ? { ...item, specialInstructions: instructions } : item
             )
         )
     }
@@ -138,17 +155,30 @@ const Cart = forwardRef<CartRef, CartProps>(({ restaurantId, restaurantName, min
             return
         }
 
-        // 獲取用戶ID（這裡使用硬編碼，實際應該從登入狀態獲取）
-        const uid = localStorage.getItem('userId') || '1'
+        // 獲取用戶ID
+        const uid = localStorage.getItem('userId')
+        if (!uid) {
+            toast({
+                title: "錯誤",
+                description: "請先登入",
+                variant: "destructive"
+            })
+            return
+        }
+
+        console.log(`👤 用戶ID:`, uid)
+        console.log(`🛒 購物車商品:`, cartItems)
+        console.log(`📍 外送地址:`, deliveryAddress)
+        console.log(`💰 總金額:`, total)
 
         setIsSubmitting(true)
 
         try {
             const orderData = {
-                uid: parseInt(uid),
+                uid: uid, // 直接使用字符串格式的用戶ID
                 rid: restaurantId,
                 items: cartItems.map(item => ({
-                    mid: item.mid,
+                    dishId: item.dishId,
                     quantity: item.quantity,
                     unitPrice: item.price,
                     subtotal: item.price * item.quantity,
@@ -159,6 +189,8 @@ const Cart = forwardRef<CartRef, CartProps>(({ restaurantId, restaurantName, min
                 deliveryFee,
                 notes: orderNotes
             }
+
+            console.log(`📦 準備提交訂單:`, orderData)
 
             const response = await fetch('/api/orders', {
                 method: 'POST',
@@ -234,7 +266,7 @@ const Cart = forwardRef<CartRef, CartProps>(({ restaurantId, restaurantName, min
                             ) : (
                                 <>
                                     {cartItems.map((item) => (
-                                        <div key={item.mid} className="flex items-start space-x-3 p-3 border rounded-lg">
+                                        <div key={item.dishId} className="flex items-start space-x-3 p-3 border rounded-lg">
                                             <img
                                                 src={item.image}
                                                 alt={item.name}
@@ -246,7 +278,7 @@ const Cart = forwardRef<CartRef, CartProps>(({ restaurantId, restaurantName, min
                                                     <Button
                                                         variant="ghost"
                                                         size="sm"
-                                                        onClick={() => removeFromCart(item.mid)}
+                                                        onClick={() => removeFromCart(item.dishId)}
                                                     >
                                                         <Trash2 className="h-4 w-4" />
                                                     </Button>
@@ -257,7 +289,7 @@ const Cart = forwardRef<CartRef, CartProps>(({ restaurantId, restaurantName, min
                                                         <Button
                                                             variant="outline"
                                                             size="sm"
-                                                            onClick={() => updateQuantity(item.mid, item.quantity - 1)}
+                                                            onClick={() => updateQuantity(item.dishId, item.quantity - 1)}
                                                         >
                                                             <Minus className="h-3 w-3" />
                                                         </Button>
@@ -265,7 +297,7 @@ const Cart = forwardRef<CartRef, CartProps>(({ restaurantId, restaurantName, min
                                                         <Button
                                                             variant="outline"
                                                             size="sm"
-                                                            onClick={() => updateQuantity(item.mid, item.quantity + 1)}
+                                                            onClick={() => updateQuantity(item.dishId, item.quantity + 1)}
                                                         >
                                                             <Plus className="h-3 w-3" />
                                                         </Button>
@@ -274,7 +306,7 @@ const Cart = forwardRef<CartRef, CartProps>(({ restaurantId, restaurantName, min
                                                 <Input
                                                     placeholder="特殊要求（選填）"
                                                     value={item.specialInstructions || ""}
-                                                    onChange={(e) => updateSpecialInstructions(item.mid, e.target.value)}
+                                                    onChange={(e) => updateSpecialInstructions(item.dishId, e.target.value)}
                                                     className="text-sm"
                                                 />
                                             </div>

@@ -15,6 +15,7 @@ import { Textarea } from "@/components/ui/textarea"
 interface Order {
   oid: number
   rid: number
+  did?: number
   restaurant_name: string
   restaurant_image: string
   delivery_address: string
@@ -50,23 +51,31 @@ const statusMap = {
 export default function UserOrdersPage() {
   const [orders, setOrders] = useState<Order[]>([])
   const [loading, setLoading] = useState(true)
+  const [searchQuery, setSearchQuery] = useState("")
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null)
   const [restaurantRating, setRestaurantRating] = useState(5)
   const [deliveryRating, setDeliveryRating] = useState(5)
   const [restaurantComment, setRestaurantComment] = useState("")
   const [deliveryComment, setDeliveryComment] = useState("")
   const [submittingRating, setSubmittingRating] = useState(false)
-  const [searchQuery, setSearchQuery] = useState("")
   const [activeTab, setActiveTab] = useState("all")
+  const [userId, setUserId] = useState<string>("")
   const router = useRouter()
   const { toast } = useToast()
 
-  // 獲取用戶ID（實際應該從登入狀態獲取）
-  const userId = localStorage.getItem('userId') || '1'
+  // 獲取用戶ID
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const id = localStorage.getItem('userId') || '1'
+      setUserId(id)
+    }
+  }, [])
 
   useEffect(() => {
-    fetchOrders()
-  }, [])
+    if (userId) {
+      fetchOrders()
+    }
+  }, [userId])
 
   const fetchOrders = async () => {
     try {
@@ -100,7 +109,7 @@ export default function UserOrdersPage() {
           oid: selectedOrder.oid,
           uid: parseInt(userId),
           rid: selectedOrder.rid,
-          did: 1, // 這裡應該從訂單中獲取外送員ID
+          did: selectedOrder.did || null,
           restaurantRating,
           deliveryRating,
           restaurantComment,
@@ -166,7 +175,11 @@ export default function UserOrdersPage() {
   // 過濾訂單
   const filteredOrders = orders.filter((order) => {
     // 根據標籤過濾
-    if (activeTab === "processing" && order.status !== "processing") return false
+    if (activeTab === "processing") {
+      // 處理中包含：待確認、已接受、準備中、已完成（等待取餐）、外送中
+      const processingStatuses = ["pending", "accepted", "preparing", "ready", "delivering"]
+      if (!processingStatuses.includes(order.status)) return false
+    }
     if (activeTab === "completed" && order.status !== "completed") return false
     if (activeTab === "cancelled" && order.status !== "cancelled") return false
 
@@ -250,12 +263,24 @@ export default function UserOrdersPage() {
                           <div className="font-medium text-lg">${order.total_amount - order.delivery_fee}</div>
                           <div className="text-sm text-muted-foreground">{order.items.length} 件商品</div>
                         </div>
-                        <Link href={`/user/orders/${order.oid}`}>
-                          <Button variant="outline" size="sm" className="whitespace-nowrap">
-                            查看詳情
-                            <ChevronRight className="ml-1 h-4 w-4" />
-                          </Button>
-                        </Link>
+                        <div className="flex gap-2">
+                          <Link href={`/user/orders/${order.oid}`}>
+                            <Button variant="outline" size="sm" className="whitespace-nowrap">
+                              查看詳情
+                              <ChevronRight className="ml-1 h-4 w-4" />
+                            </Button>
+                          </Link>
+                          {order.status === "completed" && !order.restaurant_rating && (
+                            <Button
+                              size="sm"
+                              className="whitespace-nowrap bg-brand-primary hover:bg-brand-primary/90"
+                              onClick={() => setSelectedOrder(order)}
+                            >
+                              <Star className="mr-1 h-4 w-4" />
+                              評分
+                            </Button>
+                          )}
+                        </div>
                       </div>
                     </div>
                   </CardContent>

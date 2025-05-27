@@ -59,7 +59,7 @@ export async function GET(req: Request) {
 // 更新餐廳資料
 export async function PUT(req: Request) {
   try {
-    const body = await req.json()
+    const data = await req.json()
     const {
       rid,
       name,
@@ -72,9 +72,8 @@ export async function PUT(req: Request) {
       is_open,
       image,
       delivery_area,
-      rating,
       cuisine
-    } = body
+    } = data
 
     if (!rid) {
       return NextResponse.json({ 
@@ -83,28 +82,28 @@ export async function PUT(req: Request) {
       }, { status: 400 })
     }
 
+    // 更新餐廳資料
     const result = await pool.query(
       `UPDATE restaurant 
        SET 
-         rname = $2,
+         rname = $1,
+         description = $2,
          raddress = $3,
-         description = $4,
-         rphonenumber = $5,
-         remail = $6,
-         business_hours = $7,
-         min_order = $8,
-         is_open = $9,
-         image = $10,
-         delivery_area = $11,
-         rating = $12,
-         cuisine = $13
-       WHERE rid = $1
-       RETURNING rid, rname`,
+         rphonenumber = $4,
+         remail = $5,
+         business_hours = $6,
+         min_order = $7,
+         is_open = $8,
+         image = $9,
+         delivery_area = $10,
+         cuisine = $11,
+         updated_at = CURRENT_TIMESTAMP
+       WHERE rid = $12
+       RETURNING *`,
       [
-        rid,
         name,
-        address,
         description,
+        address,
         phone,
         email,
         business_hours,
@@ -112,8 +111,8 @@ export async function PUT(req: Request) {
         is_open,
         image,
         delivery_area,
-        rating,
-        cuisine
+        cuisine,
+        rid
       ]
     )
 

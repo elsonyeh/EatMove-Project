@@ -213,7 +213,7 @@ export default function RestaurantProductsPage() {
         </Button>
       </div>
 
-      <Tabs value={tab} onValueChange={setTab} className="mb-4">
+      <Tabs value={tab} onValueChange={(value) => setTab(value as "all" | "主餐" | "配菜" | "飲料")} className="mb-4">
         <TabsList>
           <TabsTrigger value="all">全部商品</TabsTrigger>
           <TabsTrigger value="主餐">主餐</TabsTrigger>

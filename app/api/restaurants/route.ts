@@ -10,6 +10,24 @@ export async function GET(req: Request) {
     const userLat = parseFloat(url.searchParams.get("lat") || "0")
     const userLng = parseFloat(url.searchParams.get("lng") || "0")
     const userAddress = url.searchParams.get("address") || "高雄市"
+    const getCategories = url.searchParams.get("getCategories") === "true"
+
+    // 如果只是要獲取可用的料理類型
+    if (getCategories) {
+      const categoriesResult = await pool.query(`
+        SELECT DISTINCT cuisine 
+        FROM restaurant 
+        WHERE is_open = true AND cuisine IS NOT NULL AND cuisine != ''
+        ORDER BY cuisine ASC
+      `)
+      
+      const availableCategories = categoriesResult.rows.map(row => row.cuisine)
+      
+      return NextResponse.json({
+        success: true,
+        categories: availableCategories
+      })
+    }
 
     let query = `
       SELECT 
@@ -61,7 +79,7 @@ export async function GET(req: Request) {
         "japanese": "日式料理", 
         "korean": "韓式料理",
         "western": "西式料理",
-        "thai": "泰式料理",
+        "thai": "南洋料理",
         "italian": "義式料理",
         "american": "美式料理",
         "taiwanese": "台式料理",
@@ -171,18 +189,17 @@ export async function GET(req: Request) {
       }
     })
 
-    return NextResponse.json({ 
-      success: true, 
+    return NextResponse.json({
+      success: true,
       restaurants,
-      total: restaurants.length 
+      total: restaurants.length
     })
 
   } catch (err: any) {
-    console.error("❌ 獲取餐廳資料失敗：", err)
-    return NextResponse.json({ 
-      success: false, 
-      message: "資料庫讀取失敗", 
-      error: err.message 
-    }, { status: 500 })
+    console.error("❌ 查詢餐廳失敗：", err)
+    return NextResponse.json(
+      { success: false, message: "資料庫錯誤", error: err.message },
+      { status: 500 }
+    )
   }
 } 

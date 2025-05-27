@@ -107,12 +107,12 @@ export async function GET(
         r.rphonenumber as restaurant_phone,
         r.raddress as restaurant_address,
         m.name as member_name,
-        m.phone as member_phone,
+        m.phonenumber as member_phone,
         d.dname as delivery_name,
         d.dphonenumber as delivery_phone
       FROM orders o
       LEFT JOIN restaurant r ON o.rid = r.rid
-      LEFT JOIN member m ON o.uid = m.uid
+      LEFT JOIN member m ON o.mid = m.mid
       LEFT JOIN deliveryman d ON o.did = d.did
       WHERE o.oid = $1
     `, [oid])
@@ -132,8 +132,9 @@ export async function GET(
         m.image as menu_image,
         m.description as menu_description
       FROM order_items oi
-      LEFT JOIN menu m ON oi.mid = m.mid
+      LEFT JOIN menu m ON oi.rid = m.rid AND oi.dishid = m.dishid
       WHERE oi.oid = $1
+      ORDER BY oi.item_id
     `, [oid])
 
     const order = {

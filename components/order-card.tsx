@@ -1,7 +1,6 @@
 "use client"
 
 import { useState } from "react"
-import Image from "next/image"
 import { Card, CardContent, CardFooter } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -157,15 +156,7 @@ export function OrderCard({ order, onStatusChange }: OrderCardProps) {
             <h4 className="text-sm font-medium mb-2">訂單內容:</h4>
             <div className="space-y-2">
               {order.items.map((item: any, index: number) => (
-                <div key={index} className="flex items-center gap-3">
-                  <div className="relative h-10 w-10 overflow-hidden rounded-md">
-                    <Image
-                      src={item.image || "/placeholder.svg?height=40&width=40"}
-                      alt={item.name}
-                      fill
-                      className="object-cover"
-                    />
-                  </div>
+                <div key={index} className="flex items-center justify-between">
                   <div className="flex-1">
                     <div className="text-sm font-medium">{item.name}</div>
                     <div className="text-xs text-muted-foreground">x{item.quantity}</div>

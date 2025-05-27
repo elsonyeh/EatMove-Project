@@ -3,25 +3,21 @@
 import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Clock, Phone, MapPin, Package, CheckCircle } from "lucide-react"
+import { Badge } from "@/components/ui/badge"
+import { CheckCircle, Clock, MapPin, Package } from "lucide-react"
 import { useToast } from "@/components/ui/use-toast"
+import { useRouter } from "next/navigation"
 
 interface Order {
     oid: number
-    uid: number
     rid: number
-    member_name: string
-    member_phone: string
     restaurant_name: string
-    restaurant_phone: string
     restaurant_address: string
     delivery_address: string
     total_amount: number
     delivery_fee: number
     status: string
-    notes: string
     created_at: string
     estimated_delivery_time: string
     items: Array<{
@@ -30,11 +26,11 @@ interface Order {
         quantity: number
         unit_price: number
         subtotal: number
-        special_instructions: string
     }>
 }
 
 const statusMap = {
+    preparing: { label: "準備中", color: "bg-orange-500" },
     ready: { label: "待接單", color: "bg-green-500" },
     delivering: { label: "配送中", color: "bg-blue-500" },
     completed: { label: "已完成", color: "bg-gray-500" }
@@ -44,22 +40,31 @@ export default function DeliveryOrdersPage() {
     const [availableOrders, setAvailableOrders] = useState<Order[]>([])
     const [myOrders, setMyOrders] = useState<Order[]>([])
     const [loading, setLoading] = useState(true)
+    const [deliverymanId, setDeliverymanId] = useState<string>("")
     const { toast } = useToast()
+    const router = useRouter()
 
-    // 獲取外送員ID（實際應該從登入狀態獲取）
-    const deliverymanId = localStorage.getItem('deliverymanId') || '1'
+    // 獲取外送員ID
+    useEffect(() => {
+        if (typeof window !== 'undefined') {
+            const id = localStorage.getItem('userId') || '1'
+            setDeliverymanId(id)
+        }
+    }, [])
 
     useEffect(() => {
-        fetchOrders()
-        // 每30秒刷新一次訂單
-        const interval = setInterval(fetchOrders, 30000)
-        return () => clearInterval(interval)
-    }, [])
+        if (deliverymanId) {
+            fetchOrders()
+            // 每30秒刷新一次訂單
+            const interval = setInterval(fetchOrders, 30000)
+            return () => clearInterval(interval)
+        }
+    }, [deliverymanId])
 
     const fetchOrders = async () => {
         try {
-            // 獲取可接單的訂單（狀態為ready且沒有外送員）
-            const availableResponse = await fetch('/api/orders?status=ready&available=true')
+            // 獲取可接單的訂單（狀態為preparing或ready且沒有外送員）
+            const availableResponse = await fetch('/api/orders?available=true')
             const availableResult = await availableResponse.json()
 
             // 獲取我的訂單（已分配給我的訂單）
@@ -67,11 +72,11 @@ export default function DeliveryOrdersPage() {
             const myResult = await myResponse.json()
 
             if (availableResult.success) {
-                setAvailableOrders(availableResult.orders)
+                setAvailableOrders(availableResult.orders || [])
             }
 
             if (myResult.success) {
-                setMyOrders(myResult.orders)
+                setMyOrders(myResult.orders || [])
             }
         } catch (error) {
             console.error("獲取訂單失敗:", error)
@@ -120,14 +125,13 @@ export default function DeliveryOrdersPage() {
 
     const completeDelivery = async (oid: number) => {
         try {
-            const response = await fetch(`/api/orders/${oid}`, {
-                method: 'PUT',
+            const response = await fetch(`/api/orders/${oid}/status`, {
+                method: 'PATCH',
                 headers: {
                     'Content-Type': 'application/json',
                 },
                 body: JSON.stringify({
-                    status: 'completed',
-                    actualDeliveryTime: new Date().toISOString()
+                    status: 'completed'
                 })
             })
 
@@ -160,97 +164,102 @@ export default function DeliveryOrdersPage() {
         return new Date(timeString).toLocaleString('zh-TW')
     }
 
+    const formatCurrency = (amount: number) => {
+        return new Intl.NumberFormat('zh-TW', {
+            style: 'currency',
+            currency: 'TWD',
+            minimumFractionDigits: 0,
+        }).format(amount)
+    }
+
     const OrderCard = ({ order, showAcceptButton = false, showCompleteButton = false }: {
-        order: Order,
-        showAcceptButton?: boolean,
+        order: Order
+        showAcceptButton?: boolean
         showCompleteButton?: boolean
     }) => (
         <Card className="overflow-hidden">
-            <CardHeader className="pb-3">
-                <div className="flex items-center justify-between">
-                    <CardTitle className="text-lg">訂單 #{order.oid}</CardTitle>
-                    <Badge className={`${statusMap[order.status as keyof typeof statusMap]?.color} text-white`}>
-                        {statusMap[order.status as keyof typeof statusMap]?.label}
-                    </Badge>
-                </div>
-                <div className="flex items-center gap-4 text-sm text-muted-foreground">
-                    <div className="flex items-center gap-1">
-                        <Clock className="h-4 w-4" />
-                        <span>{formatTime(order.created_at)}</span>
-                    </div>
-                    <div className="flex items-center gap-1">
-                        <Package className="h-4 w-4" />
-                        <span>${order.total_amount}</span>
-                    </div>
-                </div>
-            </CardHeader>
-            <CardContent className="space-y-4">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <CardContent className="p-6">
+                <div className="flex justify-between items-start mb-4">
                     <div>
-                        <h4 className="font-medium mb-2">取餐地點</h4>
-                        <p className="text-sm font-medium">{order.restaurant_name}</p>
-                        <div className="flex items-start gap-1 text-sm text-muted-foreground">
-                            <MapPin className="h-4 w-4 mt-0.5 flex-shrink-0" />
-                            <span>{order.restaurant_address}</span>
-                        </div>
-                        <div className="flex items-center gap-1 text-sm text-muted-foreground mt-1">
-                            <Phone className="h-4 w-4" />
-                            <span>{order.restaurant_phone}</span>
-                        </div>
+                        <h3 className="font-bold text-lg">訂單 #{order.oid}</h3>
+                        <p className="text-muted-foreground">{order.restaurant_name}</p>
+                        <p className="text-sm text-muted-foreground">{formatTime(order.created_at)}</p>
+                        <Badge className={`${statusMap[order.status as keyof typeof statusMap]?.color} text-white mt-2`}>
+                            {statusMap[order.status as keyof typeof statusMap]?.label}
+                        </Badge>
                     </div>
-
-                    <div>
-                        <h4 className="font-medium mb-2">送餐地點</h4>
-                        <p className="text-sm font-medium">{order.member_name}</p>
-                        <div className="flex items-start gap-1 text-sm text-muted-foreground">
-                            <MapPin className="h-4 w-4 mt-0.5 flex-shrink-0" />
-                            <span>{order.delivery_address}</span>
-                        </div>
-                        <div className="flex items-center gap-1 text-sm text-muted-foreground mt-1">
-                            <Phone className="h-4 w-4" />
-                            <span>{order.member_phone}</span>
+                    <div className="text-right">
+                        <div className="font-bold text-lg">{formatCurrency(order.delivery_fee)}</div>
+                        <div className="text-sm text-muted-foreground">配送費</div>
+                        <div className="text-sm text-muted-foreground mt-1">
+                            總額: {formatCurrency(order.total_amount)}
                         </div>
                     </div>
                 </div>
 
-                <div>
-                    <h4 className="font-medium mb-2">訂單內容</h4>
-                    <div className="space-y-1">
-                        {order.items.map((item, index) => (
-                            <div key={index} className="flex justify-between items-center text-sm">
-                                <span>{item.menu_name} x{item.quantity}</span>
-                                <span>${item.subtotal}</span>
-                            </div>
-                        ))}
-                    </div>
-                    <div className="border-t pt-2 mt-2">
-                        <div className="flex justify-between font-semibold">
-                            <span>總計</span>
-                            <span>${order.total_amount}</span>
+                <div className="space-y-3 mb-4">
+                    <div className="flex items-start gap-2">
+                        <Package className="h-4 w-4 mt-1 text-muted-foreground" />
+                        <div>
+                            <div className="font-medium">餐廳地址</div>
+                            <div className="text-sm text-muted-foreground">{order.restaurant_address || '請聯繫餐廳確認地址'}</div>
                         </div>
-                        <div className="flex justify-between text-sm text-muted-foreground">
-                            <span>外送費</span>
-                            <span>${order.delivery_fee}</span>
+                    </div>
+
+                    <div className="flex items-start gap-2">
+                        <MapPin className="h-4 w-4 mt-1 text-muted-foreground" />
+                        <div>
+                            <div className="font-medium">送達地址</div>
+                            <div className="text-sm text-muted-foreground">{order.delivery_address}</div>
+                        </div>
+                    </div>
+
+                    <div className="flex items-start gap-2">
+                        <Clock className="h-4 w-4 mt-1 text-muted-foreground" />
+                        <div>
+                            <div className="font-medium">預計送達時間</div>
+                            <div className="text-sm text-muted-foreground">{formatTime(order.estimated_delivery_time)}</div>
+                        </div>
+                    </div>
+
+                    <div>
+                        <div className="font-medium mb-2">訂單內容</div>
+                        <div className="space-y-1">
+                            {order.items.map((item, index) => (
+                                <div key={index} className="flex justify-between text-sm">
+                                    <span>{item.menu_name} x{item.quantity}</span>
+                                    <span>{formatCurrency(item.subtotal)}</span>
+                                </div>
+                            ))}
                         </div>
                     </div>
                 </div>
-
-                {order.notes && (
-                    <div>
-                        <h4 className="font-medium mb-1">備註</h4>
-                        <p className="text-sm text-muted-foreground">{order.notes}</p>
-                    </div>
-                )}
 
                 <div className="pt-2">
                     {showAcceptButton && (
-                        <Button
-                            onClick={() => acceptOrder(order.oid)}
-                            className="w-full"
-                        >
-                            <CheckCircle className="h-4 w-4 mr-2" />
-                            接受訂單
-                        </Button>
+                        <>
+                            {order.status === 'preparing' && (
+                                <div className="mb-3 p-2 bg-orange-50 border border-orange-200 rounded-md">
+                                    <p className="text-sm text-orange-700">
+                                        🍳 餐廳正在準備中，您可以先接單並前往餐廳
+                                    </p>
+                                </div>
+                            )}
+                            {order.status === 'ready' && (
+                                <div className="mb-3 p-2 bg-green-50 border border-green-200 rounded-md">
+                                    <p className="text-sm text-green-700">
+                                        ✅ 餐點已準備完成，可立即取餐
+                                    </p>
+                                </div>
+                            )}
+                            <Button
+                                onClick={() => acceptOrder(order.oid)}
+                                className="w-full"
+                            >
+                                <CheckCircle className="h-4 w-4 mr-2" />
+                                接受訂單
+                            </Button>
+                        </>
                     )}
 
                     {showCompleteButton && order.status === 'delivering' && (
@@ -259,6 +268,16 @@ export default function DeliveryOrdersPage() {
                             className="w-full"
                         >
                             確認送達
+                        </Button>
+                    )}
+
+                    {order.status === 'delivering' && !showCompleteButton && (
+                        <Button
+                            onClick={() => router.push(`/delivery/orders/${order.oid}`)}
+                            className="w-full"
+                            variant="outline"
+                        >
+                            查看詳情
                         </Button>
                     )}
                 </div>
@@ -299,6 +318,9 @@ export default function DeliveryOrdersPage() {
                         <Card>
                             <CardContent className="py-12 text-center">
                                 <p className="text-muted-foreground">目前沒有可接的訂單</p>
+                                <Button onClick={fetchOrders} variant="outline" className="mt-4">
+                                    重新整理
+                                </Button>
                             </CardContent>
                         </Card>
                     ) : (
@@ -318,7 +340,7 @@ export default function DeliveryOrdersPage() {
                     {myOrders.length === 0 ? (
                         <Card>
                             <CardContent className="py-12 text-center">
-                                <p className="text-muted-foreground">您目前沒有進行中的訂單</p>
+                                <p className="text-muted-foreground">目前沒有進行中的訂單</p>
                             </CardContent>
                         </Card>
                     ) : (

@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>修正用戶ID</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 600px;
+            margin: 50px auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+        }
+
+        h1 {
+            color: #333;
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        .info {
+            background: #e3f2fd;
+            padding: 15px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+            border-left: 4px solid #2196f3;
+        }
+
+        .error {
+            background: #ffebee;
+            padding: 15px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+            border-left: 4px solid #f44336;
+        }
+
+        .success {
+            background: #e8f5e8;
+            padding: 15px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+            border-left: 4px solid #4caf50;
+        }
+
+        select,
+        button {
+            width: 100%;
+            padding: 12px;
+            margin: 10px 0;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            font-size: 16px;
+        }
+
+        button {
+            background: #2196f3;
+            color: white;
+            border: none;
+            cursor: pointer;
+        }
+
+        button:hover {
+            background: #1976d2;
+        }
+
+        .current-id {
+            font-weight: bold;
+            color: #f44336;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <h1>🔧 修正用戶ID</h1>
+
+        <div class="info">
+            <strong>問題說明：</strong><br>
+            目前localStorage中儲存的userId與資料庫中的會員ID不匹配，導致無法正常載入用戶資料和購物車。
+        </div>
+
+        <div id="currentStatus"></div>
+
+        <label for="memberSelect">選擇正確的會員ID：</label>
+        <select id="memberSelect">
+            <option value="">請選擇會員...</option>
+            <option value="M000002">M000002 - test123 (test@test.com)</option>
+            <option value="M000003">M000003 - elson (elson921121@gmail.com)</option>
+            <option value="M000004">M000004 - admin123 (admin@admin.com)</option>
+            <option value="M000005">M000005 - jisdjfidjfij (asijdiadh@gmail.com)</option>
+            <option value="M000006">M000006 - pppppp (ppp@ppp.com)</option>
+            <option value="M000008">M000008 - store3 (store3@store3.com)</option>
+            <option value="M000009">M000009 - test333 (test333@test333.com)</option>
+            <option value="test001">test001 - 測試用戶 (test@example.com)</option>
+        </select>
+
+        <button onclick="updateUserId()">更新用戶ID</button>
+
+        <button onclick="clearStorage()" style="background: #f44336; margin-top: 10px;">清除所有localStorage資料</button>
+
+        <div id="result"></div>
+
+        <div class="info" style="margin-top: 30px;">
+            <strong>使用說明：</strong><br>
+            1. 選擇您要使用的會員ID<br>
+            2. 點擊「更新用戶ID」按鈕<br>
+            3. 重新整理EatMove網站即可正常使用
+        </div>
+    </div>
+
+    <script>
+        // 顯示當前狀態
+        function showCurrentStatus() {
+            const currentUserId = localStorage.getItem('userId');
+            const statusDiv = document.getElementById('currentStatus');
+
+            if (currentUserId) {
+                statusDiv.innerHTML = `
+                    <div class="error">
+                        <strong>當前localStorage中的userId：</strong> 
+                        <span class="current-id">${currentUserId}</span><br>
+                        <small>此ID在資料庫中不存在，需要修正</small>
+                    </div>
+                `;
+            } else {
+                statusDiv.innerHTML = `
+                    <div class="info">
+                        <strong>當前localStorage中沒有userId</strong><br>
+                        <small>請選擇一個會員ID進行設定</small>
+                    </div>
+                `;
+            }
+        }
+
+        // 更新用戶ID
+        function updateUserId() {
+            const selectedId = document.getElementById('memberSelect').value;
+            const resultDiv = document.getElementById('result');
+
+            if (!selectedId) {
+                resultDiv.innerHTML = `
+                    <div class="error">
+                        請先選擇一個會員ID
+                    </div>
+                `;
+                return;
+            }
+
+            try {
+                localStorage.setItem('userId', selectedId);
+                resultDiv.innerHTML = `
+                    <div class="success">
+                        ✅ 用戶ID已更新為：<strong>${selectedId}</strong><br>
+                        <small>請重新整理EatMove網站以套用變更</small>
+                    </div>
+                `;
+
+                // 更新當前狀態顯示
+                setTimeout(showCurrentStatus, 1000);
+
+            } catch (error) {
+                resultDiv.innerHTML = `
+                    <div class="error">
+                        ❌ 更新失敗：${error.message}
+                    </div>
+                `;
+            }
+        }
+
+        // 清除localStorage
+        function clearStorage() {
+            if (confirm('確定要清除所有localStorage資料嗎？這將會登出所有帳號。')) {
+                localStorage.clear();
+                document.getElementById('result').innerHTML = `
+                    <div class="success">
+                        ✅ 已清除所有localStorage資料
+                    </div>
+                `;
+                showCurrentStatus();
+            }
+        }
+
+        // 頁面載入時顯示當前狀態
+        window.onload = function () {
+            showCurrentStatus();
+        };
+    </script>
+</body>
+
+</html>

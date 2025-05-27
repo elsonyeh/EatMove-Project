@@ -308,11 +308,12 @@ export default function UserHomePage() {
             {/* 餐廳列表渲染 */}
             {filteredRestaurants.length > 0 ? (
               <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
-                {filteredRestaurants.map((restaurant) => (
+                {filteredRestaurants.map((restaurant, index) => (
                   <RestaurantCard
                     key={restaurant.id}
                     restaurant={restaurant}
                     isFavorite={favorites.some((fav) => fav.id === restaurant.id)}
+                    priority={index < 4} // 前4張圖片設定為高優先級
                   />
                 ))}
               </div>

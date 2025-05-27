@@ -107,11 +107,11 @@ export const restaurants: Restaurant[] = [
     isNew: false,
     distance: "1.2 km",
   },
-  // 泰式料理
+  // 南洋料理
   {
     id: "restaurant-thai-1",
     name: "泰饗樂",
-    description: "道地泰國風味，酸辣可口，讓您彷彿置身曼谷",
+    description: "道地南洋風味，酸辣可口，讓您彷彿置身東南亞",
     coverImage: "/placeholder.svg?height=200&width=300&text=泰饗樂",
     rating: 4.6,
     deliveryTime: "30-45 分鐘",
@@ -119,7 +119,7 @@ export const restaurants: Restaurant[] = [
     minimumOrder: 180,
     address: "台北市松山區南京東路五段123號",
     phone: "02-2756-1234",
-    cuisine: "泰式料理",
+    cuisine: "南洋料理",
     isNew: false,
     distance: "3.1 km",
   },

@@ -10,15 +10,17 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { useToast } from '@/components/ui/use-toast'
 import { useFavorites } from '@/hooks/use-favorites'
 import { useRecentViews } from '@/hooks/use-recent-views'
+import { useCart } from '@/hooks/use-cart'
 import { MenuItemCard } from '@/components/menu-item-card'
-import Cart, { CartRef } from '@/components/cart'
+import { useCartDB } from '@/hooks/use-cart-db'
 
 export default function RestaurantPage() {
   const params = useParams()
   const id = Array.isArray(params?.id) ? params.id[0] : params?.id
   const { toast } = useToast()
-  const { favorites, addFavorite, removeFavorite, isFavorite } = useFavorites()
+  const { addFavorite, removeFavorite, isFavorite } = useFavorites()
   const { addRecentView } = useRecentViews()
+  const { addToCart } = useCartDB()
   const [restaurant, setRestaurant] = useState<any>(null)
   const [menu, setMenu] = useState<any>({})
   const [categories, setCategories] = useState<string[]>([])
@@ -26,7 +28,6 @@ export default function RestaurantPage() {
   const [loading, setLoading] = useState(true)
   const [userLocation, setUserLocation] = useState<{ lat: number, lng: number } | null>(null)
   const [userAddress, setUserAddress] = useState("高雄市")
-  const cartRef = useRef<CartRef>(null)
 
   // 獲取用戶位置
   useEffect(() => {
@@ -77,7 +78,23 @@ export default function RestaurantPage() {
 
         if (restaurantData.success) {
           setRestaurant(restaurantData.restaurant)
-          addRecentView(restaurantData.restaurant)
+          // 只在成功載入時添加到最近瀏覽，轉換為正確的格式
+          const recentViewData = {
+            id: restaurantData.restaurant.id.toString(),
+            name: restaurantData.restaurant.name,
+            description: restaurantData.restaurant.description || '',
+            coverImage: restaurantData.restaurant.image || '/images/restaurants/default.jpg',
+            rating: restaurantData.restaurant.rating,
+            deliveryTime: restaurantData.restaurant.deliveryTime || '30-45 分鐘',
+            deliveryFee: restaurantData.restaurant.deliveryFee || 60,
+            minimumOrder: restaurantData.restaurant.minimumOrder || 300,
+            address: restaurantData.restaurant.address || '',
+            phone: restaurantData.restaurant.phone || '',
+            cuisine: restaurantData.restaurant.cuisine || '綜合料理',
+            isNew: false,
+            distance: restaurantData.restaurant.distance
+          }
+          addRecentView(recentViewData)
         } else {
           console.error('❌ 餐廳資料載入失敗:', restaurantData.message)
         }
@@ -99,7 +116,7 @@ export default function RestaurantPage() {
     if (id) {
       fetchData()
     }
-  }, [id, addRecentView, userLocation, userAddress])
+  }, [id, userLocation, userAddress])
 
   const handleToggleFavorite = () => {
     if (!restaurant) return
@@ -119,23 +136,58 @@ export default function RestaurantPage() {
     }
   }
 
-  const addToCart = (dishId: number) => {
-    // 在所有分類中尋找該菜品
+  const addToCartHandler = async (dishId: number) => {
+    console.log(`🛒 添加商品到購物車，菜品ID: ${dishId}`)
+
+    // 查找菜品資訊
     let item = null
     for (const category of categories) {
       const categoryItems = menu[category] || []
       item = categoryItems.find((menuItem: any) => menuItem.dishId === dishId)
-      if (item) break
+      if (item) {
+        console.log(`✅ 找到菜品:`, item)
+        break
+      }
     }
 
-    if (!item || !cartRef) return
+    if (!item) {
+      console.error(`❌ 找不到菜品 ID: ${dishId}`)
+      console.log(`📋 可用分類:`, categories)
+      console.log(`📋 菜單資料:`, menu)
+      toast({
+        title: "添加失敗",
+        description: "找不到該商品",
+        variant: "destructive",
+      })
+      return
+    }
 
-    cartRef.current?.addToCart({
-      mid: item.dishId,
-      name: item.name,
-      price: item.price,
-      image: item.image || '/images/menu/default.jpg'
-    })
+    if (!restaurant) {
+      console.error(`❌ 餐廳資訊不存在`)
+      toast({
+        title: "添加失敗",
+        description: "餐廳資訊不存在",
+        variant: "destructive",
+      })
+      return
+    }
+
+    console.log(`🛒 準備添加到購物車:`, { rid: restaurant.id, dishId, quantity: 1 })
+
+    const success = await addToCart(restaurant.id, dishId, 1)
+
+    if (success) {
+      toast({
+        title: "已加入購物車",
+        description: `${item.name} 已加入購物車`,
+      })
+    } else {
+      toast({
+        title: "添加失敗",
+        description: "無法添加到購物車，請重試",
+        variant: "destructive",
+      })
+    }
   }
 
   if (loading) {
@@ -231,72 +283,83 @@ export default function RestaurantPage() {
         </div>
 
         <Tabs value={activeCategory} onValueChange={setActiveCategory} className="w-full">
-          <TabsList className="grid w-full grid-cols-auto bg-white rounded-lg p-1 mb-6">
-            <TabsTrigger value="all" className="text-sm">
-              全部
-            </TabsTrigger>
-            {categories.map((category) => (
-              <TabsTrigger key={category} value={category} className="text-sm">
-                {category}
+          <div className="bg-white rounded-lg shadow-sm mb-6 p-4">
+            <TabsList className="w-full h-auto p-1 bg-gray-50 rounded-lg flex-wrap justify-start gap-1">
+              <TabsTrigger
+                value="all"
+                className="flex-shrink-0 px-4 py-2 text-sm font-medium rounded-md data-[state=active]:bg-brand-primary data-[state=active]:text-white data-[state=active]:shadow-sm transition-all duration-200"
+              >
+                全部菜單
               </TabsTrigger>
-            ))}
-          </TabsList>
+              {categories.map((category) => (
+                <TabsTrigger
+                  key={category}
+                  value={category}
+                  className="flex-shrink-0 px-4 py-2 text-sm font-medium rounded-md data-[state=active]:bg-brand-primary data-[state=active]:text-white data-[state=active]:shadow-sm transition-all duration-200"
+                >
+                  {category}
+                </TabsTrigger>
+              ))}
+            </TabsList>
+          </div>
 
           <TabsContent value={activeCategory} className="mt-0">
-            <div className="bg-white rounded-lg shadow-sm">
-              <div className="space-y-6">
-                {activeCategory === 'all' ? (
-                  categories.map((category) => (
-                    <div key={category}>
-                      <h3 className="text-lg font-semibold mb-4 px-6 pt-6">{category}</h3>
-                      <div className="space-y-4 px-6 pb-6">
+            <div className="bg-white rounded-lg shadow-sm overflow-hidden">
+              {activeCategory === 'all' ? (
+                <div className="divide-y divide-gray-100">
+                  {categories.map((category, categoryIndex) => (
+                    <div key={category} className="py-6">
+                      <div className="px-6 mb-4">
+                        <h3 className="text-xl font-bold text-gray-900 flex items-center">
+                          <span className="w-1 h-6 bg-brand-primary rounded-full mr-3"></span>
+                          {category}
+                          <span className="ml-2 text-sm font-normal text-gray-500">
+                            ({(menu[category] || []).length} 道菜)
+                          </span>
+                        </h3>
+                      </div>
+                      <div className="space-y-3 px-6">
                         {(menu[category] || []).map((item: any, index: number) => (
                           <MenuItemCard
                             key={`${category}-${item.dishId}`}
                             item={item}
                             cuisine={restaurant.cuisine}
                             index={index}
-                            onAddToCart={() => addToCart(item.dishId)}
+                            onAddToCart={() => addToCartHandler(item.dishId)}
                           />
                         ))}
                       </div>
                     </div>
-                  ))
-                ) : (
-                  <div className="space-y-4 p-6">
+                  ))}
+                </div>
+              ) : (
+                <div className="py-6">
+                  <div className="px-6 mb-4">
+                    <h3 className="text-xl font-bold text-gray-900 flex items-center">
+                      <span className="w-1 h-6 bg-brand-primary rounded-full mr-3"></span>
+                      {activeCategory}
+                      <span className="ml-2 text-sm font-normal text-gray-500">
+                        ({(menu[activeCategory] || []).length} 道菜)
+                      </span>
+                    </h3>
+                  </div>
+                  <div className="space-y-3 px-6">
                     {(menu[activeCategory] || []).map((item: any, index: number) => (
                       <MenuItemCard
                         key={`${activeCategory}-${item.dishId}`}
                         item={item}
                         cuisine={restaurant.cuisine}
                         index={index}
-                        onAddToCart={() => addToCart(item.dishId)}
+                        onAddToCart={() => addToCartHandler(item.dishId)}
                       />
                     ))}
                   </div>
-                )}
-              </div>
+                </div>
+              )}
             </div>
           </TabsContent>
         </Tabs>
       </div>
-
-      {/* 購物車組件 */}
-      {restaurant && (
-        <Cart
-          ref={cartRef}
-          restaurantId={restaurant.id}
-          restaurantName={restaurant.name}
-          minOrder={restaurant.minOrder || 300}
-          deliveryFee={restaurant.deliveryFee || 50}
-          onOrderSuccess={() => {
-            toast({
-              title: "訂單提交成功",
-              description: "您的訂單已成功提交，餐廳將盡快處理"
-            })
-          }}
-        />
-      )}
     </div>
   )
 }

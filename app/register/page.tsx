@@ -49,6 +49,13 @@ export default function RegisterPage() {
   const [emailError, setEmailError] = useState<string | null>(null)
   const [address, setAddress] = useState("")
   const [description, setDescription] = useState("")
+  const [registrationError, setRegistrationError] = useState<{
+    message: string
+    suggestion?: string
+    errorType?: string
+    field?: string
+  } | null>(null)
+  const [isSubmitting, setIsSubmitting] = useState(false)
 
   // 設定 canvas 的 willReadFrequently 屬性
   useEffect(() => {
@@ -517,23 +524,61 @@ export default function RegisterPage() {
   }, [password])
 
   const handleRegister = async () => {
+    console.log("🔍 開始註冊流程...");
+    console.log("📊 當前狀態:", {
+      email,
+      password,
+      confirmPassword,
+      username,
+      phonenumber,
+      userType,
+      address,
+      description
+    });
+
+    // 清除之前的錯誤
+    setRegistrationError(null)
+    setIsSubmitting(true)
+
     // 基本驗證
     if (!email || !password || !confirmPassword || !username || !phonenumber) {
-      toast({
-        title: "錯誤",
-        description: "請填寫所有必要欄位",
-        variant: "destructive",
+      console.log("❌ 基本驗證失敗 - 缺少必要欄位");
+      setRegistrationError({
+        message: "請填寫所有必要欄位",
+        field: "required"
       })
+      setIsSubmitting(false)
       return
     }
 
     // 驗證密碼確認
     if (password !== confirmPassword) {
-      toast({
-        title: "錯誤",
-        description: "密碼與確認密碼不符",
-        variant: "destructive",
+      console.log("❌ 密碼確認失敗");
+      setRegistrationError({
+        message: "密碼與確認密碼不符",
+        field: "password"
       })
+      setIsSubmitting(false)
+      return
+    }
+
+    // 驗證email格式
+    if (emailError) {
+      setRegistrationError({
+        message: "請輸入有效的電子郵件地址",
+        field: "email"
+      })
+      setIsSubmitting(false)
+      return
+    }
+
+    // 驗證密碼強度
+    if (passwordError) {
+      setRegistrationError({
+        message: passwordError,
+        field: "password"
+      })
+      setIsSubmitting(false)
       return
     }
 
@@ -551,6 +596,8 @@ export default function RegisterPage() {
         description
       }
 
+      console.log("📤 準備發送的註冊資料:", registrationData);
+
       // 發送註冊請求
       const response = await fetch("/api/auth/register", {
         method: "POST",
@@ -560,30 +607,80 @@ export default function RegisterPage() {
         body: JSON.stringify(registrationData),
       })
 
+      console.log("📊 API回應狀態:", response.status);
+
       const data = await response.json()
+      console.log("📊 API回應資料:", data);
 
       if (data.success) {
+        console.log("✅ 註冊成功");
         toast({
-          title: "註冊成功",
-          description: "請使用新帳號登入",
+          title: "註冊成功！",
+          description: data.message || "請使用新帳號登入",
         })
         router.push("/login")
       } else {
-        toast({
-          title: "註冊失敗",
-          description: data.message || "註冊時發生錯誤",
-          variant: "destructive",
+        console.log("❌ 註冊失敗:", data.message);
+
+        // 設置詳細的錯誤資訊
+        setRegistrationError({
+          message: data.message,
+          suggestion: data.suggestion,
+          errorType: data.errorType,
+          field: data.errorType === "EMAIL_EXISTS" ? "email" :
+            data.errorType === "PHONE_EXISTS" ? "phone" :
+              data.errorType === "ACCOUNT_EXISTS" ? "account" : "general"
         })
+
+        // 不顯示toast，改為在表單中顯示錯誤
       }
     } catch (error) {
-      console.error("註冊失敗:", error)
-      toast({
-        title: "錯誤",
-        description: "註冊時發生錯誤，請稍後再試",
-        variant: "destructive",
+      console.error("❌ 註冊過程發生錯誤:", error)
+      setRegistrationError({
+        message: "網路連線錯誤，請檢查網路連線後再試",
+        suggestion: "請確認網路連線正常，或稍後再試",
+        field: "network"
       })
+    } finally {
+      setIsSubmitting(false)
     }
   }
+
+  // 清除註冊錯誤的函數
+  const clearRegistrationError = () => {
+    setRegistrationError(null)
+  }
+
+  // 當用戶修改相關欄位時，清除對應的錯誤
+  useEffect(() => {
+    if (registrationError?.field === "email") {
+      clearRegistrationError()
+    }
+  }, [email])
+
+  useEffect(() => {
+    if (registrationError?.field === "phone") {
+      clearRegistrationError()
+    }
+  }, [phonenumber])
+
+  useEffect(() => {
+    if (registrationError?.field === "password") {
+      clearRegistrationError()
+    }
+  }, [password, confirmPassword])
+
+  useEffect(() => {
+    if (registrationError?.field === "account") {
+      clearRegistrationError()
+    }
+  }, [account])
+
+  useEffect(() => {
+    if (registrationError?.field === "required") {
+      clearRegistrationError()
+    }
+  }, [email, password, confirmPassword, username, phonenumber])
 
   return (
     <>
@@ -719,6 +816,40 @@ export default function RegisterPage() {
                   </div>
                 ) : (
                   <form className="space-y-4">
+                    {/* 錯誤提示區域 */}
+                    {registrationError && (
+                      <div className="p-4 border border-red-200 bg-red-50 rounded-lg">
+                        <div className="flex items-start">
+                          <div className="flex-shrink-0">
+                            <svg className="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
+                              <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                            </svg>
+                          </div>
+                          <div className="ml-3 flex-1">
+                            <h3 className="text-sm font-medium text-red-800">
+                              {registrationError.message}
+                            </h3>
+                            {registrationError.suggestion && (
+                              <div className="mt-2 text-sm text-red-700">
+                                <p>{registrationError.suggestion}</p>
+                              </div>
+                            )}
+                            <div className="mt-3">
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                onClick={clearRegistrationError}
+                                className="text-red-800 border-red-300 hover:bg-red-100"
+                              >
+                                我知道了
+                              </Button>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
                     <div className="space-y-2">
                       <Label htmlFor="username">
                         {userType === "restaurant" ? "店家名稱" : "用戶名稱"}
@@ -732,6 +863,7 @@ export default function RegisterPage() {
                         }
                         value={username}
                         onChange={(e) => setUsername(e.target.value)}
+                        className={registrationError?.field === "required" && !username ? "border-red-300" : ""}
                       />
                     </div>
                     <div className="space-y-2">
@@ -742,6 +874,10 @@ export default function RegisterPage() {
                         placeholder="請輸入電子郵件"
                         value={email}
                         onChange={(e) => setEmail(e.target.value)}
+                        className={
+                          (emailError || (registrationError?.field === "email") || (registrationError?.field === "required" && !email))
+                            ? "border-red-300" : ""
+                        }
                       />
                       {emailError && (
                         <p className="text-sm text-red-500">{emailError}</p>
@@ -749,6 +885,11 @@ export default function RegisterPage() {
                       <p className="text-sm text-muted-foreground">
                         請輸入有效的電子郵件地址，例如：example@domain.com
                       </p>
+                      {registrationError?.field === "email" && (
+                        <p className="text-sm text-amber-600">
+                          💡 提示：不同角色（用戶、店家、外送員）可以使用相同的電子郵件
+                        </p>
+                      )}
                     </div>
                     <div className="space-y-2">
                       <Label htmlFor="phonenumber">電話號碼</Label>
@@ -758,10 +899,37 @@ export default function RegisterPage() {
                         placeholder="請輸入電話號碼"
                         value={phonenumber}
                         onChange={(e) => setPhoneNumber(e.target.value)}
+                        className={
+                          (registrationError?.field === "phone" || (registrationError?.field === "required" && !phonenumber))
+                            ? "border-red-300" : ""
+                        }
                       />
+                      {registrationError?.field === "phone" && (
+                        <p className="text-sm text-amber-600">
+                          💡 提示：不同角色（用戶、店家、外送員）可以使用相同的電話號碼
+                        </p>
+                      )}
                     </div>
                     {userType === "restaurant" && (
                       <>
+                        <div className="space-y-2">
+                          <Label htmlFor="account">帳號名稱（選填）</Label>
+                          <Input
+                            id="account"
+                            placeholder="請輸入帳號名稱，留空則使用電子郵件"
+                            value={account}
+                            onChange={(e) => setAccount(e.target.value)}
+                            className={registrationError?.field === "account" ? "border-red-300" : ""}
+                          />
+                          {registrationError?.field === "account" && (
+                            <p className="text-sm text-amber-600">
+                              💡 提示：請嘗試其他帳號名稱
+                            </p>
+                          )}
+                          <p className="text-sm text-muted-foreground">
+                            如果不填寫，系統將使用您的電子郵件作為帳號
+                          </p>
+                        </div>
                         <div className="space-y-2">
                           <Label htmlFor="address">餐廳地址</Label>
                           <Input
@@ -790,6 +958,10 @@ export default function RegisterPage() {
                         placeholder="請輸入密碼"
                         value={password}
                         onChange={(e) => setPassword(e.target.value)}
+                        className={
+                          (passwordError || (registrationError?.field === "password") || (registrationError?.field === "required" && !password))
+                            ? "border-red-300" : ""
+                        }
                       />
                       {passwordError && (
                         <p className="text-sm text-red-500">{passwordError}</p>
@@ -806,6 +978,10 @@ export default function RegisterPage() {
                         placeholder="請再次輸入密碼"
                         value={confirmPassword}
                         onChange={(e) => setConfirmPassword(e.target.value)}
+                        className={
+                          (registrationError?.field === "password" || (registrationError?.field === "required" && !confirmPassword))
+                            ? "border-red-300" : ""
+                        }
                       />
                     </div>
                     {(userType === "user" || userType === "delivery") && (
@@ -831,8 +1007,15 @@ export default function RegisterPage() {
                         </p>
                       </div>
                     )}
-                    <Button type="button" onClick={handleRegister} className="w-full">
-                      註冊
+                    <Button type="button" onClick={handleRegister} className="w-full" disabled={isSubmitting}>
+                      {isSubmitting ? (
+                        <>
+                          <span className="animate-spin mr-2">⭮</span>
+                          註冊中...
+                        </>
+                      ) : (
+                        "註冊"
+                      )}
                     </Button>
                   </form>
                 )}

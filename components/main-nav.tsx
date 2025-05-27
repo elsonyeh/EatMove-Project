@@ -51,13 +51,22 @@ export function MainNav() {
           {route.active && <span className="absolute -bottom-1.5 left-0 right-0 h-0.5 bg-brand-primary rounded-full" />}
         </Link>
       ))}
-      <div className="flex items-center text-sm font-medium transition-colors hover:text-brand-primary relative group">
-        <CartIcon className={pathname === "/user/cart" ? "text-brand-primary" : "text-muted-foreground"} />
-        <span className="ml-2">購物車</span>
+      <Link
+        href="/user/cart"
+        className={cn(
+          "flex items-center text-sm font-medium transition-colors hover:text-brand-primary relative group",
+          pathname === "/user/cart" ? "text-brand-primary" : "text-muted-foreground",
+        )}
+      >
+        <CartIcon className={cn(
+          "mr-2 transition-all",
+          pathname === "/user/cart" ? "text-brand-primary" : "text-muted-foreground group-hover:text-brand-primary",
+        )} />
+        <span>購物車</span>
         {pathname === "/user/cart" && (
           <span className="absolute -bottom-1.5 left-0 right-0 h-0.5 bg-brand-primary rounded-full" />
         )}
-      </div>
+      </Link>
     </nav>
   )
 }

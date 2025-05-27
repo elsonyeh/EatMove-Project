@@ -25,7 +25,7 @@ export async function POST(req: Request) {
 
     // 檢查是否已經評分過
     const existingRating = await pool.query(
-      "SELECT rating_id FROM ratings WHERE oid = $1 AND uid = $2",
+      "SELECT rating_id FROM ratings WHERE oid = $1 AND mid = $2",
       [oid, uid]
     )
 
@@ -42,7 +42,7 @@ export async function POST(req: Request) {
     try {
       // 插入評分記錄
       await pool.query(`
-        INSERT INTO ratings (oid, uid, rid, did, restaurant_rating, delivery_rating, restaurant_comment, delivery_comment)
+        INSERT INTO ratings (oid, mid, rid, did, restaurant_rating, delivery_rating, restaurant_comment, delivery_comment)
         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
       `, [oid, uid, rid, did, restaurantRating, deliveryRating, restaurantComment, deliveryComment])
 
@@ -109,7 +109,7 @@ export async function GET(req: Request) {
         rest.rname as restaurant_name,
         d.dname as delivery_name
       FROM ratings r
-      LEFT JOIN member m ON r.uid = m.uid
+      LEFT JOIN member m ON r.mid = m.mid
       LEFT JOIN restaurant rest ON r.rid = rest.rid
       LEFT JOIN deliveryman d ON r.did = d.did
       WHERE 1=1
@@ -130,7 +130,7 @@ export async function GET(req: Request) {
     }
 
     if (uid) {
-      query += ` AND r.uid = $${paramIndex}`
+      query += ` AND r.mid = $${paramIndex}`
       params.push(uid)
       paramIndex++
     }

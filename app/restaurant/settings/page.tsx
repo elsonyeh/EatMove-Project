@@ -14,9 +14,11 @@ import { Switch } from "@/components/ui/switch"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { useToast } from "@/components/ui/use-toast"
 import { Upload, X } from "lucide-react"
+import { useRestaurantAuth } from "@/components/restaurant-auth-provider"
 
 export default function RestaurantSettingsPage() {
   const { toast } = useToast()
+  const { account, isLoading: authLoading } = useRestaurantAuth()
   const logoFileInputRef = useRef<HTMLInputElement>(null)
   const coverFileInputRef = useRef<HTMLInputElement>(null)
   const [loading, setLoading] = useState(true)
@@ -44,35 +46,55 @@ export default function RestaurantSettingsPage() {
     deliveryArea: "高雄市"
   })
 
-  // 從localStorage獲取餐廳ID並載入資料
+  // 從餐廳認證提供者獲取餐廳ID並載入資料
   useEffect(() => {
     const fetchRestaurantData = async () => {
+      if (authLoading || !account) {
+        return
+      }
+
       try {
-        const rid = localStorage.getItem("restaurantId")
+        const rid = account.restaurantId
+
         if (!rid) {
           toast({
             title: "錯誤",
-            description: "請先登入餐廳帳號",
+            description: "無法獲取餐廳ID",
             variant: "destructive",
           })
           return
         }
 
+        console.log("🔍 正在載入餐廳資料，RID:", rid)
         const response = await fetch(`/api/restaurant/profile?rid=${rid}`)
         const data = await response.json()
 
+        console.log("📊 API回應:", data)
+
         if (data.success) {
           const restaurant = data.restaurant
+          console.log("🏪 餐廳資料:", restaurant)
+
+          // 處理營業時間
+          let weekdayHours = "11:00-21:00";
+          let weekendHours = "10:00-22:00";
+
+          if (restaurant.business_hours) {
+            const hours = restaurant.business_hours.split(',');
+            if (hours.length >= 1) weekdayHours = hours[0].trim();
+            if (hours.length >= 2) weekendHours = hours[1].trim();
+          }
+
           setRestaurantData({
-            rid: restaurant.rid,
+            rid: restaurant.rid.toString(),
             name: restaurant.name || "",
             description: restaurant.description || "",
             address: restaurant.address || "",
             phone: restaurant.phone || "",
             email: restaurant.email || "",
             openingHours: {
-              weekday: restaurant.business_hours?.split(',')[0] || "11:00-21:00",
-              weekend: restaurant.business_hours?.split(',')[1] || "10:00-22:00",
+              weekday: weekdayHours,
+              weekend: weekendHours,
             },
             minimumOrder: restaurant.min_order?.toString() || "300",
             deliveryFee: "60", // 可以從距離計算得出
@@ -85,7 +107,18 @@ export default function RestaurantSettingsPage() {
             rating: restaurant.rating || 4.5,
             deliveryArea: restaurant.delivery_area || "高雄市"
           })
+
+          console.log("✅ 餐廳資料載入成功")
+          console.log("📝 設定的資料:", {
+            name: restaurant.name,
+            description: restaurant.description,
+            address: restaurant.address,
+            phone: restaurant.phone,
+            email: restaurant.email,
+            cuisine: restaurant.cuisine
+          })
         } else {
+          console.error("❌ API錯誤:", data.message)
           toast({
             title: "錯誤",
             description: data.message || "無法載入餐廳資料",
@@ -93,7 +126,7 @@ export default function RestaurantSettingsPage() {
           })
         }
       } catch (error) {
-        console.error("載入餐廳資料失敗:", error)
+        console.error("❌ 載入餐廳資料失敗:", error)
         toast({
           title: "錯誤",
           description: "網路連線錯誤",
@@ -105,7 +138,7 @@ export default function RestaurantSettingsPage() {
     }
 
     fetchRestaurantData()
-  }, [toast])
+  }, [account, authLoading, toast])
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target
@@ -212,6 +245,8 @@ export default function RestaurantSettingsPage() {
     setSaving(true)
 
     try {
+      console.log("💾 正在儲存餐廳資料:", restaurantData)
+
       const response = await fetch('/api/restaurant/profile', {
         method: 'PUT',
         headers: {
@@ -235,17 +270,19 @@ export default function RestaurantSettingsPage() {
       })
 
       const data = await response.json()
+      console.log("📊 儲存回應:", data)
 
       if (data.success) {
-        toast({
-          title: "設定已儲存",
-          description: "您的餐廳設定已成功更新",
-        })
+    toast({
+      title: "設定已儲存",
+      description: "您的餐廳設定已成功更新",
+    })
+        console.log("✅ 餐廳資料儲存成功")
       } else {
         throw new Error(data.message)
       }
     } catch (error) {
-      console.error("儲存失敗:", error)
+      console.error("❌ 儲存失敗:", error)
       toast({
         title: "儲存失敗",
         description: "無法儲存設定，請重試",
@@ -256,7 +293,7 @@ export default function RestaurantSettingsPage() {
     }
   }
 
-  if (loading) {
+  if (authLoading || loading) {
     return (
       <div className="container py-6">
         <div className="flex justify-center items-center py-12">
@@ -343,7 +380,7 @@ export default function RestaurantSettingsPage() {
                       <SelectItem value="韓式料理">韓式料理</SelectItem>
                       <SelectItem value="義式料理">義式料理</SelectItem>
                       <SelectItem value="美式料理">美式料理</SelectItem>
-                      <SelectItem value="泰式料理">泰式料理</SelectItem>
+                      <SelectItem value="南洋料理">南洋料理</SelectItem>
                       <SelectItem value="素食">素食</SelectItem>
                       <SelectItem value="甜點">甜點</SelectItem>
                       <SelectItem value="飲料">飲料</SelectItem>
@@ -472,12 +509,12 @@ export default function RestaurantSettingsPage() {
                   <div className="flex items-start gap-4">
                     <div className="relative h-24 w-24 overflow-hidden rounded-md border-2 border-dashed border-gray-300">
                       {restaurantData.logo ? (
-                        <Image
+                      <Image
                           src={restaurantData.logo}
-                          alt="餐廳標誌"
-                          fill
-                          className="object-cover"
-                        />
+                        alt="餐廳標誌"
+                        fill
+                        className="object-cover"
+                      />
                       ) : (
                         <div className="flex h-full w-full items-center justify-center bg-gray-50">
                           <Upload className="h-6 w-6 text-gray-400" />
@@ -485,8 +522,8 @@ export default function RestaurantSettingsPage() {
                       )}
                     </div>
                     <div className="flex-1 space-y-2">
-                      <div className="grid gap-2">
-                        <Label htmlFor="logo">標誌網址</Label>
+                    <div className="grid gap-2">
+                      <Label htmlFor="logo">標誌網址</Label>
                         <Input
                           id="logo"
                           name="logo"
@@ -533,12 +570,12 @@ export default function RestaurantSettingsPage() {
                   <div className="space-y-4">
                     <div className="relative h-48 w-full overflow-hidden rounded-md border-2 border-dashed border-gray-300">
                       {restaurantData.coverImage ? (
-                        <Image
+                      <Image
                           src={restaurantData.coverImage}
-                          alt="封面圖片"
-                          fill
-                          className="object-cover"
-                        />
+                        alt="封面圖片"
+                        fill
+                        className="object-cover"
+                      />
                       ) : (
                         <div className="flex h-full w-full items-center justify-center bg-gray-50">
                           <Upload className="h-8 w-8 text-gray-400" />
