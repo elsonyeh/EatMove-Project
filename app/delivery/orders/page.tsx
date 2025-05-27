@@ -63,23 +63,45 @@ export default function DeliveryOrdersPage() {
 
     const fetchOrders = async () => {
         try {
+            console.log("🔄 正在獲取外送員訂單，外送員ID:", deliverymanId)
+
             // 獲取可接單的訂單（狀態為preparing或ready且沒有外送員）
             const availableResponse = await fetch('/api/orders?available=true')
             const availableResult = await availableResponse.json()
+
+            console.log("📋 可接單訂單查詢結果:", availableResult)
 
             // 獲取我的訂單（已分配給我的訂單）
             const myResponse = await fetch(`/api/orders?did=${deliverymanId}`)
             const myResult = await myResponse.json()
 
+            console.log("📋 我的訂單查詢結果:", myResult)
+
             if (availableResult.success) {
                 setAvailableOrders(availableResult.orders || [])
+                console.log("✅ 設置可接單訂單數量:", availableResult.orders?.length || 0)
+            } else {
+                console.error("❌ 獲取可接單訂單失敗:", availableResult.message)
+                setAvailableOrders([])
             }
 
             if (myResult.success) {
                 setMyOrders(myResult.orders || [])
+                console.log("✅ 設置我的訂單數量:", myResult.orders?.length || 0)
+            } else {
+                console.error("❌ 獲取我的訂單失敗:", myResult.message)
+                setMyOrders([])
             }
         } catch (error) {
-            console.error("獲取訂單失敗:", error)
+            console.error("❌ 獲取訂單失敗:", error)
+            setAvailableOrders([])
+            setMyOrders([])
+
+            toast({
+                title: "獲取訂單失敗",
+                description: "無法連接到服務器，請檢查網絡連接",
+                variant: "destructive"
+            })
         } finally {
             setLoading(false)
         }

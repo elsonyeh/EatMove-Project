@@ -4,9 +4,10 @@ import type React from "react"
 import { useState, useEffect } from "react"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
-import { Search, MapPin } from "lucide-react"
+import { Search, MapPin, Camera } from "lucide-react"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { useToast } from "@/components/ui/use-toast"
+import { ImageSearch } from "@/components/image-search"
 
 interface SearchBarProps {
   onSearch: (query: string, location: string) => void
@@ -20,6 +21,7 @@ export function SearchBar({ onSearch, initialQuery = "", initialLocation = "" }:
   const [location, setLocation] = useState(initialLocation)
   const [isOpen, setIsOpen] = useState(false)
   const [locationInput, setLocationInput] = useState(initialLocation)
+  const [showImageSearch, setShowImageSearch] = useState(false)
 
   // 當初始位置改變時更新狀態
   useEffect(() => {
@@ -129,96 +131,116 @@ export function SearchBar({ onSearch, initialQuery = "", initialLocation = "" }:
   )
 
   return (
-    <form onSubmit={handleSubmit} className="flex gap-2">
-      <div className="flex-1 relative">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-        <Input
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          placeholder="搜尋餐廳、美食或地區..."
-          className="pl-10 bg-white"
-        />
-      </div>
-      <Popover open={isOpen} onOpenChange={setIsOpen}>
-        <PopoverTrigger asChild>
-          <Button
-            variant="outline"
-            className="bg-white min-w-[200px] justify-start text-left text-foreground"
-            onClick={() => setIsOpen(true)}
-          >
-            <MapPin className="mr-2 h-4 w-4" />
-            <span className="truncate">{location || "選擇或輸入地區"}</span>
-          </Button>
-        </PopoverTrigger>
-        <PopoverContent className="w-[300px] p-3">
-          <div className="space-y-3">
-            {/* 地址輸入框 */}
-            <div className="space-y-2">
-              <label className="text-sm font-medium">輸入地址</label>
-              <div className="flex gap-2">
-                <Input
-                  value={locationInput}
-                  onChange={handleLocationInputChange}
-                  placeholder="輸入完整地址..."
-                  className="flex-1"
-                  onKeyPress={(e) => {
-                    if (e.key === 'Enter') {
-                      e.preventDefault()
-                      handleLocationInputSubmit()
-                    }
-                  }}
-                />
+    <>
+      <form onSubmit={handleSubmit} className="flex gap-2">
+        <div className="flex-1 relative">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="搜尋餐廳、美食或地區..."
+            className="pl-10 bg-white"
+          />
+        </div>
+        <Popover open={isOpen} onOpenChange={setIsOpen}>
+          <PopoverTrigger asChild>
+            <Button
+              variant="outline"
+              className="bg-white min-w-[200px] justify-start text-left text-foreground"
+              onClick={() => setIsOpen(true)}
+            >
+              <MapPin className="mr-2 h-4 w-4" />
+              <span className="truncate">{location || "選擇或輸入地區"}</span>
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent className="w-[300px] p-3">
+            <div className="space-y-3">
+              {/* 地址輸入框 */}
+              <div className="space-y-2">
+                <label className="text-sm font-medium">輸入地址</label>
+                <div className="flex gap-2">
+                  <Input
+                    value={locationInput}
+                    onChange={handleLocationInputChange}
+                    placeholder="輸入完整地址..."
+                    className="flex-1"
+                    onKeyPress={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault()
+                        handleLocationInputSubmit()
+                      }
+                    }}
+                  />
+                  <Button
+                    size="sm"
+                    onClick={handleLocationInputSubmit}
+                    className="bg-brand-primary hover:bg-brand-primary/90"
+                  >
+                    確定
+                  </Button>
+                </div>
+              </div>
+
+              {/* 分隔線 */}
+              <div className="border-t pt-2">
                 <Button
-                  size="sm"
-                  onClick={handleLocationInputSubmit}
-                  className="bg-brand-primary hover:bg-brand-primary/90"
+                  variant="ghost"
+                  className="w-full justify-start mb-2"
+                  onClick={() => {
+                    getCurrentLocation()
+                  }}
                 >
-                  確定
+                  <MapPin className="mr-2 h-4 w-4" />
+                  使用目前位置
                 </Button>
               </div>
-            </div>
 
-            {/* 分隔線 */}
-            <div className="border-t pt-2">
-              <Button
-                variant="ghost"
-                className="w-full justify-start mb-2"
-                onClick={() => {
-                  getCurrentLocation()
-                }}
-              >
-                <MapPin className="mr-2 h-4 w-4" />
-                使用目前位置
-              </Button>
-            </div>
-
-            {/* 常用地區 */}
-            <div className="space-y-1">
-              <label className="text-sm font-medium">常用地區</label>
-              <div className="max-h-40 overflow-y-auto space-y-1">
-                {filteredLocations.map((loc) => (
-                  <Button
-                    key={loc}
-                    variant="ghost"
-                    className="w-full justify-start text-sm"
-                    onClick={() => handleLocationSelect(loc)}
-                  >
-                    {loc}
-                  </Button>
-                ))}
-                {filteredLocations.length === 0 && locationInput && (
-                  <p className="text-sm text-muted-foreground p-2">
-                    沒有找到符合的地區
-                  </p>
-                )}
+              {/* 常用地區 */}
+              <div className="space-y-1">
+                <label className="text-sm font-medium">常用地區</label>
+                <div className="max-h-40 overflow-y-auto space-y-1">
+                  {filteredLocations.map((loc) => (
+                    <Button
+                      key={loc}
+                      variant="ghost"
+                      className="w-full justify-start text-sm"
+                      onClick={() => handleLocationSelect(loc)}
+                    >
+                      {loc}
+                    </Button>
+                  ))}
+                  {filteredLocations.length === 0 && locationInput && (
+                    <p className="text-sm text-muted-foreground p-2">
+                      沒有找到符合的地區
+                    </p>
+                  )}
+                </div>
               </div>
             </div>
-          </div>
-        </PopoverContent>
-      </Popover>
-      <Button type="submit" className="bg-brand-primary hover:bg-brand-primary/90">
-        搜尋
-      </Button>
-    </form>
+          </PopoverContent>
+        </Popover>
+        
+        {/* 以圖搜圖按鈕 */}
+        <Button
+          type="button"
+          variant="outline"
+          className="bg-white border-brand-primary text-brand-primary hover:bg-brand-primary hover:text-white"
+          onClick={() => setShowImageSearch(true)}
+        >
+          <Camera className="h-4 w-4 mr-2" />
+          以圖搜圖
+        </Button>
+        
+        <Button type="submit" className="bg-brand-primary hover:bg-brand-primary/90">
+          搜尋
+        </Button>
+      </form>
+
+      {/* 以圖搜圖對話框 */}
+      <ImageSearch 
+        isOpen={showImageSearch} 
+        onClose={() => setShowImageSearch(false)} 
+      />
+    </>
   )
 }

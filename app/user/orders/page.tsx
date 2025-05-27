@@ -66,8 +66,9 @@ export default function UserOrdersPage() {
   // 獲取用戶ID
   useEffect(() => {
     if (typeof window !== 'undefined') {
-      const id = localStorage.getItem('userId') || '1'
+      const id = localStorage.getItem('userId') || 'M000010'
       setUserId(id)
+      console.log("👤 用戶訂單頁面，設定用戶ID:", id)
     }
   }, [])
 
@@ -79,16 +80,32 @@ export default function UserOrdersPage() {
 
   const fetchOrders = async () => {
     try {
+      console.log("🔄 獲取用戶訂單，用戶ID:", userId)
       const response = await fetch(`/api/orders?uid=${userId}`)
       const result = await response.json()
 
+      console.log("📋 用戶訂單查詢結果:", result)
+
       if (result.success) {
-        setOrders(result.orders)
+        setOrders(result.orders || [])
+        console.log("✅ 設置用戶訂單數量:", result.orders?.length || 0)
       } else {
-        console.error("獲取訂單失敗:", result.message)
+        console.error("❌ 獲取訂單失敗:", result.message)
+        setOrders([])
+        toast({
+          title: "獲取訂單失敗",
+          description: result.message || "無法載入訂單數據",
+          variant: "destructive"
+        })
       }
     } catch (error) {
-      console.error("獲取訂單失敗:", error)
+      console.error("❌ 獲取訂單失敗:", error)
+      setOrders([])
+      toast({
+        title: "網路錯誤",
+        description: "無法連接到服務器，請檢查網絡連接",
+        variant: "destructive"
+      })
     } finally {
       setLoading(false)
     }

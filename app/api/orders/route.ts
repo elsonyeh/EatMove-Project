@@ -103,9 +103,23 @@ export async function GET(req: Request) {
     const status = url.searchParams.get("status")
     const available = url.searchParams.get("available")
 
+    console.log("🔍 查詢訂單參數:", { uid, rid, did, status, available })
+
     let query = `
       SELECT 
-        o.*,
+        o.oid,
+        o.mid,
+        o.rid,
+        o.did,
+        o.delivery_address,
+        o.total_amount,
+        o.delivery_fee,
+        o.status,
+        o.notes,
+        o.order_time as created_at,
+        o.estimated_delivery_time,
+        o.actual_delivery_time,
+        o.payment_method,
         r.rname as restaurant_name,
         r.raddress as restaurant_address,
         r.image as restaurant_image,
@@ -124,57 +138,98 @@ export async function GET(req: Request) {
       query += ` AND o.mid = $${paramIndex}`
       params.push(uid)
       paramIndex++
+      console.log("👤 查詢用戶訂單，用戶ID:", uid)
     }
 
     if (rid) {
       query += ` AND o.rid = $${paramIndex}`
       params.push(rid)
       paramIndex++
+      console.log("🏪 查詢餐廳訂單，餐廳ID:", rid)
     }
 
     if (did) {
       query += ` AND o.did = $${paramIndex}`
       params.push(did)
       paramIndex++
+      console.log("🚚 查詢外送員訂單，外送員ID:", did)
     }
 
     if (status) {
       query += ` AND o.status = $${paramIndex}`
       params.push(status)
       paramIndex++
+      console.log("📊 查詢指定狀態訂單，狀態:", status)
     }
 
     if (available === 'true') {
       query += ` AND o.status IN ('preparing', 'ready') AND o.did IS NULL`
+      console.log("📋 查詢可接單的訂單")
     }
 
     query += ` ORDER BY o.order_time DESC`
 
     const result = await pool.query(query, params)
+    console.log("📊 查詢到訂單數量:", result.rows.length)
 
     // 為每個訂單獲取訂單項目
     const ordersWithItems = await Promise.all(
       result.rows.map(async (order) => {
         const itemsResult = await pool.query(`
           SELECT 
-            oi.*,
+            oi.oid,
+            oi.rid,
+            oi.dishid,
+            oi.quantity,
+            oi.unit_price,
+            oi.subtotal,
+            oi.special_instructions,
             m.name as menu_name,
             m.image as menu_image
           FROM order_items oi
           LEFT JOIN menu m ON oi.rid = m.rid AND oi.dishid = m.dishid
           WHERE oi.oid = $1
+          ORDER BY oi.dishid
         `, [order.oid])
 
         return {
-          ...order,
-          items: itemsResult.rows
+          oid: order.oid,
+          mid: order.mid,
+          rid: order.rid,
+          did: order.did,
+          restaurant_name: order.restaurant_name,
+          restaurant_address: order.restaurant_address,
+          restaurant_image: order.restaurant_image || '/images/restaurants/default.jpg',
+          delivery_address: order.delivery_address,
+          total_amount: parseFloat(order.total_amount),
+          delivery_fee: parseFloat(order.delivery_fee),
+          status: order.status,
+          notes: order.notes || '',
+          created_at: order.created_at,
+          estimated_delivery_time: order.estimated_delivery_time,
+          actual_delivery_time: order.actual_delivery_time,
+          payment_method: order.payment_method,
+          member_name: order.member_name,
+          delivery_name: order.delivery_name,
+          items: itemsResult.rows.map(item => ({
+            mid: item.dishid, // 注意：這裡的mid實際上是menu item id (dishid)
+            menu_name: item.menu_name,
+            quantity: item.quantity,
+            unit_price: parseFloat(item.unit_price),
+            subtotal: parseFloat(item.subtotal),
+            special_instructions: item.special_instructions || '',
+            menu_image: item.menu_image || '/images/menu/default.jpg'
+          }))
         }
       })
     )
 
+    console.log("✅ 訂單查詢成功，返回數據數量:", ordersWithItems.length)
+
     return NextResponse.json({
       success: true,
-      orders: ordersWithItems
+      orders: ordersWithItems,
+      total: ordersWithItems.length
     })
 
   } catch (err: any) {

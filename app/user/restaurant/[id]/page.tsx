@@ -1,12 +1,13 @@
 'use client'
 
 import { useEffect, useState, useRef } from 'react'
-import { useParams } from 'next/navigation'
+import { useParams, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import Image from 'next/image'
-import { ChevronLeft, Heart, Star } from 'lucide-react'
+import { ChevronLeft, Heart, Star, Sparkles } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { Badge } from '@/components/ui/badge'
 import { useToast } from '@/components/ui/use-toast'
 import { useFavorites } from '@/hooks/use-favorites'
 import { useRecentViews } from '@/hooks/use-recent-views'
@@ -16,7 +17,9 @@ import { useCartDB } from '@/hooks/use-cart-db'
 
 export default function RestaurantPage() {
   const params = useParams()
+  const searchParams = useSearchParams()
   const id = Array.isArray(params?.id) ? params.id[0] : params?.id
+  const highlightDishId = searchParams?.get('highlight') // 高亮顯示的菜品ID
   const { toast } = useToast()
   const { addFavorite, removeFavorite, isFavorite } = useFavorites()
   const { addRecentView } = useRecentViews()
@@ -28,6 +31,7 @@ export default function RestaurantPage() {
   const [loading, setLoading] = useState(true)
   const [userLocation, setUserLocation] = useState<{ lat: number, lng: number } | null>(null)
   const [userAddress, setUserAddress] = useState("高雄市")
+  const highlightedItemRef = useRef<HTMLDivElement>(null)
 
   // 獲取用戶位置
   useEffect(() => {
@@ -78,23 +82,31 @@ export default function RestaurantPage() {
 
         if (restaurantData.success) {
           setRestaurant(restaurantData.restaurant)
-          // 只在成功載入時添加到最近瀏覽，轉換為正確的格式
-          const recentViewData = {
-            id: restaurantData.restaurant.id.toString(),
-            name: restaurantData.restaurant.name,
-            description: restaurantData.restaurant.description || '',
-            coverImage: restaurantData.restaurant.image || '/images/restaurants/default.jpg',
-            rating: restaurantData.restaurant.rating,
-            deliveryTime: restaurantData.restaurant.deliveryTime || '30-45 分鐘',
-            deliveryFee: restaurantData.restaurant.deliveryFee || 60,
-            minimumOrder: restaurantData.restaurant.minimumOrder || 300,
-            address: restaurantData.restaurant.address || '',
-            phone: restaurantData.restaurant.phone || '',
-            cuisine: restaurantData.restaurant.cuisine || '綜合料理',
-            isNew: false,
-            distance: restaurantData.restaurant.distance
+
+          // 確保數據完整後再添加到最近瀏覽
+          const restaurant = restaurantData.restaurant
+          if (restaurant && restaurant.id && restaurant.name) {
+            const recentViewData = {
+              id: restaurant.id.toString(),
+              name: restaurant.name,
+              description: restaurant.description || '',
+              coverImage: restaurant.image || '/images/restaurants/default.jpg',
+              rating: restaurant.rating || 0,
+              deliveryTime: restaurant.deliveryTime || '30-45 分鐘',
+              deliveryFee: restaurant.deliveryFee || 60,
+              minimumOrder: restaurant.minOrder || restaurant.minimumOrder || 300,
+              address: restaurant.address || '',
+              phone: restaurant.phone || '',
+              cuisine: restaurant.cuisine || '綜合料理',
+              isNew: false,
+              distance: restaurant.distance || '未知距離'
+            }
+
+            console.log("🏪 準備添加餐廳到近期瀏覽:", recentViewData)
+            addRecentView(recentViewData)
+          } else {
+            console.error('❌ 餐廳數據不完整，無法添加到近期瀏覽:', restaurant)
           }
-          addRecentView(recentViewData)
         } else {
           console.error('❌ 餐廳資料載入失敗:', restaurantData.message)
         }
@@ -102,6 +114,35 @@ export default function RestaurantPage() {
         if (menuData.success) {
           setMenu(menuData.menu)
           setCategories(menuData.categories)
+
+          // 如果有高亮顯示的菜品，顯示提示並找到對應分類
+          if (highlightDishId) {
+            const highlightId = parseInt(highlightDishId)
+            let foundCategory = null
+
+            // 在所有分類中查找該菜品
+            for (const category of menuData.categories) {
+              const categoryItems = menuData.menu[category] || []
+              const foundItem = categoryItems.find((item: any) => item.dishId === highlightId)
+              if (foundItem) {
+                foundCategory = category
+                break
+              }
+            }
+
+            if (foundCategory) {
+              setActiveCategory(foundCategory)
+              toast({
+                title: "🎯 圖像搜尋結果",
+                description: "已為您定位到相似的餐點！",
+              })
+            } else {
+              toast({
+                title: "找到相似餐廳",
+                description: "雖然沒有找到完全相同的餐點，但這家餐廳有相似風格的料理",
+              })
+            }
+          }
         } else {
           console.error('❌ 菜單資料載入失敗:', menuData.message)
         }
@@ -116,7 +157,21 @@ export default function RestaurantPage() {
     if (id) {
       fetchData()
     }
-  }, [id, userLocation, userAddress])
+  }, [id, userLocation, userAddress, highlightDishId, toast])
+
+  // 當頁面載入完成且有高亮菜品時，滾動到該位置
+  useEffect(() => {
+    if (!loading && highlightDishId && highlightedItemRef.current) {
+      const timer = setTimeout(() => {
+        highlightedItemRef.current?.scrollIntoView({
+          behavior: 'smooth',
+          block: 'center'
+        })
+      }, 500) // 給一點時間讓UI更新完成
+
+      return () => clearTimeout(timer)
+    }
+  }, [loading, highlightDishId])
 
   const handleToggleFavorite = () => {
     if (!restaurant) return
@@ -190,6 +245,11 @@ export default function RestaurantPage() {
     }
   }
 
+  // 檢查菜品是否為高亮顯示的項目
+  const isHighlighted = (dishId: number) => {
+    return highlightDishId && parseInt(highlightDishId) === dishId
+  }
+
   if (loading) {
     return (
       <div className="flex justify-center items-center py-12">
@@ -222,6 +282,19 @@ export default function RestaurantPage() {
           </Link>
         </Button>
       </div>
+
+      {/* 圖像搜尋結果提示 */}
+      {highlightDishId && (
+        <div className="container mb-4">
+          <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-lg p-4 flex items-center">
+            <Sparkles className="h-5 w-5 text-blue-600 mr-3" />
+            <div>
+              <p className="font-medium text-blue-900">圖像搜尋結果</p>
+              <p className="text-sm text-blue-700">我們為您找到了相似的餐點，已在下方菜單中標示</p>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="relative h-64 w-full bg-gray-300 mb-4">
         <Image
@@ -320,13 +393,27 @@ export default function RestaurantPage() {
                       </div>
                       <div className="space-y-3 px-6">
                         {(menu[category] || []).map((item: any, index: number) => (
-                          <MenuItemCard
+                          <div
                             key={`${category}-${item.dishId}`}
-                            item={item}
-                            cuisine={restaurant.cuisine}
-                            index={index}
-                            onAddToCart={() => addToCartHandler(item.dishId)}
-                          />
+                            ref={isHighlighted(item.dishId) ? highlightedItemRef : null}
+                            className={`${isHighlighted(item.dishId)
+                              ? 'ring-2 ring-blue-500 ring-opacity-50 bg-blue-50 rounded-lg p-2 -m-2'
+                              : ''
+                              }`}
+                          >
+                            {isHighlighted(item.dishId) && (
+                              <Badge className="mb-2 bg-blue-500 text-white">
+                                <Sparkles className="h-3 w-3 mr-1" />
+                                圖像搜尋結果
+                              </Badge>
+                            )}
+                            <MenuItemCard
+                              item={item}
+                              cuisine={restaurant.cuisine}
+                              index={index}
+                              onAddToCart={() => addToCartHandler(item.dishId)}
+                            />
+                          </div>
                         ))}
                       </div>
                     </div>
@@ -345,13 +432,27 @@ export default function RestaurantPage() {
                   </div>
                   <div className="space-y-3 px-6">
                     {(menu[activeCategory] || []).map((item: any, index: number) => (
-                      <MenuItemCard
+                      <div
                         key={`${activeCategory}-${item.dishId}`}
-                        item={item}
-                        cuisine={restaurant.cuisine}
-                        index={index}
-                        onAddToCart={() => addToCartHandler(item.dishId)}
-                      />
+                        ref={isHighlighted(item.dishId) ? highlightedItemRef : null}
+                        className={`${isHighlighted(item.dishId)
+                          ? 'ring-2 ring-blue-500 ring-opacity-50 bg-blue-50 rounded-lg p-2 -m-2'
+                          : ''
+                          }`}
+                      >
+                        {isHighlighted(item.dishId) && (
+                          <Badge className="mb-2 bg-blue-500 text-white">
+                            <Sparkles className="h-3 w-3 mr-1" />
+                            圖像搜尋結果
+                          </Badge>
+                        )}
+                        <MenuItemCard
+                          item={item}
+                          cuisine={restaurant.cuisine}
+                          index={index}
+                          onAddToCart={() => addToCartHandler(item.dishId)}
+                        />
+                      </div>
                     ))}
                   </div>
                 </div>

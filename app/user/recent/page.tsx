@@ -11,7 +11,7 @@ import { useRouter } from "next/navigation"
 
 export default function UserRecentPage() {
   const router = useRouter()
-  const { recentViews, isLoaded: recentViewsLoaded } = useRecentViews()
+  const { recentViews, isLoaded: recentViewsLoaded, clearRecentViews } = useRecentViews()
   const { favorites, isLoaded: favoritesLoaded } = useFavorites()
   const [loading, setLoading] = useState(true)
   const [isClient, setIsClient] = useState(false)
@@ -24,14 +24,10 @@ export default function UserRecentPage() {
 
   useEffect(() => {
     if (isClient && recentViewsLoaded && favoritesLoaded) {
-      // 模擬加載數據
-      const timer = setTimeout(() => {
-        setLoading(false)
-      }, 600)
-
-      return () => clearTimeout(timer)
+      console.log("📚 近期瀏覽頁面初始化完成，近期瀏覽數量:", recentViews.length)
+      setLoading(false)
     }
-  }, [isClient, recentViewsLoaded, favoritesLoaded])
+  }, [isClient, recentViewsLoaded, favoritesLoaded, recentViews.length])
 
   // 過濾近期瀏覽的餐廳
   const filteredRecentViews = searchQuery
@@ -43,7 +39,7 @@ export default function UserRecentPage() {
     : recentViews
 
   // 在客戶端渲染之前顯示載入狀態
-  if (!isClient) {
+  if (!isClient || loading) {
     return (
       <div className="container py-6">
         <div className="mb-8">
@@ -77,11 +73,26 @@ export default function UserRecentPage() {
   return (
     <div className="container py-6">
       <div className="mb-8">
-        <div className="flex items-center mb-2">
-          <Clock className="h-6 w-6 text-brand-primary mr-2" />
-          <h1 className="text-3xl font-bold tracking-tight">近期瀏覽</h1>
+        <div className="flex items-center justify-between">
+          <div>
+            <div className="flex items-center mb-2">
+              <Clock className="h-6 w-6 text-brand-primary mr-2" />
+              <h1 className="text-3xl font-bold tracking-tight">近期瀏覽</h1>
+            </div>
+            <p className="text-muted-foreground">您最近瀏覽過的店家 ({recentViews.length} 家)</p>
+          </div>
+          {recentViews.length > 0 && (
+            <Button
+              variant="outline"
+              onClick={() => {
+                clearRecentViews()
+                console.log("🗑️ 已清除所有近期瀏覽")
+              }}
+            >
+              清除全部
+            </Button>
+          )}
         </div>
-        <p className="text-muted-foreground">您最近瀏覽過的店家</p>
       </div>
 
       {recentViews.length > 0 && (
@@ -99,34 +110,27 @@ export default function UserRecentPage() {
         </div>
       )}
 
-      {loading ? (
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
-          {Array(4)
-            .fill(0)
-            .map((_, i) => (
-              <div key={i} className="rounded-xl overflow-hidden">
-                <Skeleton className="h-48 w-full" />
-                <div className="p-4 space-y-3">
-                  <Skeleton className="h-6 w-3/4" />
-                  <Skeleton className="h-4 w-full" />
-                  <div className="flex gap-2">
-                    <Skeleton className="h-4 w-1/4" />
-                    <Skeleton className="h-4 w-1/4" />
-                  </div>
-                </div>
-              </div>
-            ))}
-        </div>
-      ) : filteredRecentViews.length > 0 ? (
+      {filteredRecentViews.length > 0 ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
           {filteredRecentViews.map((restaurant, index) => (
             <RestaurantCard
-              key={`recent-${restaurant.id}-${index}`}
+              key={`recent-${restaurant.id}-${restaurant.viewedAt}`}
               restaurant={restaurant}
               isFavorite={favorites.some((fav) => fav.id === restaurant.id)}
               priority={index < 4}
             />
           ))}
+        </div>
+      ) : searchQuery ? (
+        <div className="text-center py-12">
+          <h2 className="text-xl font-medium mb-2">找不到符合的餐廳</h2>
+          <p className="text-muted-foreground mb-4">試試其他關鍵字</p>
+          <Button
+            variant="outline"
+            onClick={() => setSearchQuery("")}
+          >
+            清除搜尋
+          </Button>
         </div>
       ) : (
         <div className="text-center py-12">
