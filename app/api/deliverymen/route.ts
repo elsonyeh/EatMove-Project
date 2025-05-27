@@ -107,28 +107,31 @@ export async function POST(req: Request) {
     const result = await pool.query(`
       UPDATE orders 
       SET did = $1, status = 'delivering'
-      WHERE oid = $2 AND did IS NULL
+      WHERE oid = $2 AND did IS NULL AND status IN ('preparing', 'ready')
       RETURNING oid, rid, did, status, delivery_address, total_amount
     `, [did, oid])
 
     console.log("✅ 訂單更新結果:", result.rows)
 
     if (result.rows.length === 0) {
-      console.log("❌ 訂單更新失敗，可能已被其他外送員接單")
+      console.log("❌ 訂單更新失敗，可能已被其他外送員接單或狀態不符合")
       return NextResponse.json({ 
         success: false, 
-        message: "接單失敗，訂單可能已被其他外送員接單" 
+        message: "接單失敗，訂單可能已被其他外送員接單或狀態不符合接單條件" 
       }, { status: 400 })
     }
 
     const deliverymanName = deliverymanCheck.rows[0].dname
 
-    console.log(`✅ 外送員 ${deliverymanName} (ID:${did}) 成功接單 #${oid}`)
+    console.log(`✅ 外送員 ${deliverymanName} (ID:${did}) 成功接單 #${oid}，狀態已更新為 delivering`)
 
     return NextResponse.json({
       success: true,
       message: "外送員接單成功",
-      order: result.rows[0],
+      order: {
+        ...result.rows[0],
+        status: 'delivering' // 確保返回正確的狀態
+      },
       deliveryman: {
         did: did,
         name: deliverymanName

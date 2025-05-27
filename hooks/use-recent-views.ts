@@ -17,67 +17,152 @@ export interface RecentViewRestaurant {
   cuisine: string
   isNew: boolean
   distance?: string
-  viewedAt: string // 添加查看時間
+  viewedAt: string
 }
 
 // 最大記錄數量
 const MAX_RECENT_ITEMS = 10
 
 export function useRecentViews() {
-  const [recentViews, setRecentViews] = useLocalStorage<RecentViewRestaurant[]>("eatmove-recent-views", [])
+  const [recentViews, setRecentViews] = useState<RecentViewRestaurant[]>([])
   const [isLoaded, setIsLoaded] = useState(false)
+  const [userId, setUserId] = useState<string>("")
 
+  // 獲取用戶ID
   useEffect(() => {
-    // 等待 localStorage 初始化完成
-    const timer = setTimeout(() => {
+    if (typeof window !== 'undefined') {
+      const id = localStorage.getItem('userId') || 'M000010'
+      setUserId(id)
+    }
+  }, [])
+
+  // 從數據庫載入近期瀏覽
+  useEffect(() => {
+    if (userId) {
+      loadRecentViewsFromDB()
+    }
+  }, [userId])
+
+  const loadRecentViewsFromDB = async () => {
+    try {
+      console.log("📚 從數據庫載入近期瀏覽，用戶ID:", userId)
+      const response = await fetch(`/api/recent-views?mid=${userId}`)
+      const result = await response.json()
+
+      if (result.success) {
+        setRecentViews(result.recentViews || [])
+        console.log("✅ 近期瀏覽載入成功，數量:", result.recentViews?.length || 0)
+      } else {
+        console.error("❌ 載入近期瀏覽失敗:", result.message)
+        setRecentViews([])
+      }
+    } catch (error) {
+      console.error("❌ 載入近期瀏覽發生錯誤:", error)
+      setRecentViews([])
+    } finally {
       setIsLoaded(true)
-      console.log("📚 近期瀏覽初始化完成，當前項目數量:", recentViews.length)
-    }, 100)
-    return () => clearTimeout(timer)
-  }, [recentViews.length])
+    }
+  }
 
   // 添加店家到近期瀏覽
-  const addRecentView = (restaurant: Omit<RecentViewRestaurant, 'viewedAt'>) => {
-    if (!isLoaded) {
-      console.log("⚠️ localStorage 尚未初始化，跳過添加近期瀏覽")
+  const addRecentView = async (restaurant: Omit<RecentViewRestaurant, 'viewedAt'>) => {
+    if (!isLoaded || !userId) {
+      console.log("⚠️ 用戶未登入或數據未載入，跳過添加近期瀏覽")
       return
     }
 
     console.log("➕ 添加到近期瀏覽:", restaurant.name, restaurant.id)
 
-    setRecentViews((prevViews) => {
-      // 移除已存在的相同店家（如果有）
-      const filteredViews = prevViews.filter((view) => view.id !== restaurant.id)
-
-      // 創建新的瀏覽記錄，添加查看時間
+    try {
+      // 同時更新本地狀態和數據庫
       const newView: RecentViewRestaurant = {
         ...restaurant,
         viewedAt: new Date().toISOString()
       }
 
-      // 將新店家添加到列表開頭
-      const newViews = [newView, ...filteredViews]
+      // 更新本地狀態
+      setRecentViews((prevViews) => {
+        const filteredViews = prevViews.filter((view) => view.id !== restaurant.id)
+        const newViews = [newView, ...filteredViews]
+        return newViews.slice(0, MAX_RECENT_ITEMS)
+      })
 
-      // 如果超過最大數量，則截取前MAX_RECENT_ITEMS個
-      const trimmedViews = newViews.slice(0, MAX_RECENT_ITEMS)
-      
-      console.log("✅ 近期瀏覽已更新，新數量:", trimmedViews.length)
-      return trimmedViews
-    })
+      // 同步到數據庫
+      const response = await fetch('/api/recent-views', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          mid: userId,
+          rid: parseInt(restaurant.id),
+          name: restaurant.name,
+          description: restaurant.description,
+          coverImage: restaurant.coverImage,
+          rating: restaurant.rating,
+          deliveryTime: restaurant.deliveryTime,
+          deliveryFee: restaurant.deliveryFee,
+          minimumOrder: restaurant.minimumOrder,
+          address: restaurant.address,
+          phone: restaurant.phone,
+          cuisine: restaurant.cuisine,
+          distance: restaurant.distance
+        })
+      })
+
+      const result = await response.json()
+      if (result.success) {
+        console.log("✅ 近期瀏覽已同步到數據庫")
+      } else {
+        console.error("❌ 同步近期瀏覽到數據庫失敗:", result.message)
+      }
+    } catch (error) {
+      console.error("❌ 添加近期瀏覽失敗:", error)
+    }
   }
 
   // 清除所有近期瀏覽
-  const clearRecentViews = () => {
-    if (!isLoaded) return
+  const clearRecentViews = async () => {
+    if (!isLoaded || !userId) return
+
     console.log("🗑️ 清除所有近期瀏覽")
-    setRecentViews([])
+
+    try {
+      // 清除本地狀態
+      setRecentViews([])
+
+      // 清除數據庫記錄
+      const response = await fetch(`/api/recent-views?mid=${userId}`, {
+        method: 'DELETE'
+      })
+
+      const result = await response.json()
+      if (result.success) {
+        console.log("✅ 近期瀏覽已從數據庫清除")
+      } else {
+        console.error("❌ 清除數據庫近期瀏覽失敗:", result.message)
+      }
+    } catch (error) {
+      console.error("❌ 清除近期瀏覽失敗:", error)
+    }
   }
 
   // 移除特定項目
-  const removeRecentView = (restaurantId: string) => {
-    if (!isLoaded) return
+  const removeRecentView = async (restaurantId: string) => {
+    if (!isLoaded || !userId) return
+
     console.log("🗑️ 移除近期瀏覽項目:", restaurantId)
-    setRecentViews((prevViews) => prevViews.filter((view) => view.id !== restaurantId))
+
+    try {
+      // 更新本地狀態
+      setRecentViews((prevViews) => prevViews.filter((view) => view.id !== restaurantId))
+
+      // 這裡可以添加單個項目刪除的API調用
+      // 暫時使用重新載入的方式
+      await loadRecentViewsFromDB()
+    } catch (error) {
+      console.error("❌ 移除近期瀏覽項目失敗:", error)
+    }
   }
 
   return {
@@ -86,5 +171,6 @@ export function useRecentViews() {
     clearRecentViews,
     removeRecentView,
     isLoaded,
+    refreshRecentViews: loadRecentViewsFromDB
   }
 }

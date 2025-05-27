@@ -205,14 +205,40 @@ const Cart = forwardRef<CartRef, CartProps>(({ restaurantId, restaurantName, min
             if (result.success) {
                 toast({
                     title: "訂單提交成功",
-                    description: "您的訂單已成功提交！"
+                    description: `訂單 #${result.orderId} 已成功提交！`
                 })
+
+                // 清空購物車
                 setCartItems([])
                 setDeliveryAddress("")
                 setOrderNotes("")
                 setIsOpen(false)
+
+                // 清除本地存儲
                 localStorage.removeItem(`cart_${restaurantId}`)
+
+                // 清除數據庫購物車
+                try {
+                    const clearResponse = await fetch('/api/cart', {
+                        method: 'DELETE',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({ uid })
+                    })
+                    console.log("🗑️ 清除數據庫購物車結果:", await clearResponse.json())
+                } catch (clearError) {
+                    console.error("清除數據庫購物車失敗:", clearError)
+                }
+
                 onOrderSuccess?.()
+
+                // 跳轉到訂單詳情頁面
+                if (typeof window !== 'undefined') {
+                    setTimeout(() => {
+                        window.location.href = `/user/orders/${result.orderId}`
+                    }, 1500)
+                }
             } else {
                 toast({
                     title: "訂單提交失敗",

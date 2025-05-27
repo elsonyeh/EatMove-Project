@@ -127,14 +127,29 @@ export function ImageSearch({ onClose, isOpen = false }: ImageSearchProps) {
         setIsSearching(true)
         setSearchResults([])
 
+        // 顯示搜尋開始提示
+        toast({
+            title: "🔍 開始搜尋",
+            description: "正在分析圖片並搜尋相似餐點...",
+        })
+
         try {
             // 獲取所有餐點圖片
+            console.log("📡 正在獲取餐點資料...")
             const response = await fetch('/api/search/image')
             const data = await response.json()
 
             if (!data.success) {
                 throw new Error(data.message || "獲取餐點資料失敗")
             }
+
+            console.log(`📊 獲得 ${data.data.length} 筆餐點資料`)
+
+            // 顯示分析進度提示
+            toast({
+                title: "🧠 分析中",
+                description: `正在比對 ${data.data.length} 道餐點的相似度...`,
+            })
 
             // 搜尋相似圖片
             const results = await findSimilarImages(
@@ -148,20 +163,21 @@ export function ImageSearch({ onClose, isOpen = false }: ImageSearchProps) {
 
             if (results.length === 0) {
                 toast({
-                    title: "未找到相似餐點",
-                    description: "可以嘗試調整相似度門檻或換一張圖片",
+                    title: "😔 未找到相似餐點",
+                    description: `使用 ${Math.round(threshold * 100)}% 相似度門檻未找到匹配結果。建議降低門檻或嘗試其他圖片`,
+                    variant: "destructive",
                 })
             } else {
                 toast({
-                    title: "搜尋完成",
-                    description: `找到 ${results.length} 個相似的餐點`,
+                    title: "🎉 搜尋完成！",
+                    description: `找到 ${results.length} 個相似的餐點，最高相似度 ${Math.round(results[0].similarity * 100)}%`,
                 })
             }
         } catch (error) {
-            console.error("搜尋失敗:", error)
+            console.error("❌ 搜尋失敗:", error)
             toast({
-                title: "搜尋失敗",
-                description: "搜尋過程中發生錯誤，請重試",
+                title: "❌ 搜尋失敗",
+                description: error instanceof Error ? error.message : "搜尋過程中發生錯誤，請重試",
                 variant: "destructive",
             })
         } finally {
@@ -177,9 +193,19 @@ export function ImageSearch({ onClose, isOpen = false }: ImageSearchProps) {
         if (fileInputRef.current) {
             fileInputRef.current.value = ""
         }
+
+        toast({
+            title: "🗑️ 已清除",
+            description: "圖片和搜尋結果已清除",
+        })
     }
 
     const handleResultClick = (result: SearchResult) => {
+        toast({
+            title: "🎯 跳轉到餐廳",
+            description: `正在前往 ${result.restaurantName}，查看 ${result.name}`,
+        })
+
         router.push(`/user/restaurant/${result.rid}?highlight=${result.id}`)
         if (onClose) onClose()
     }

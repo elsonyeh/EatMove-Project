@@ -177,8 +177,18 @@ export async function POST(req: Request) {
 // 清空購物車
 export async function DELETE(req: Request) {
   try {
+    // 嘗試從查詢參數或請求體中獲取用戶ID
     const url = new URL(req.url)
-    const mid = url.searchParams.get("mid")
+    let mid = url.searchParams.get("mid")
+    
+    if (!mid) {
+      try {
+        const body = await req.json()
+        mid = body.uid || body.mid
+      } catch (jsonError) {
+        // 如果解析JSON失敗，忽略錯誤
+      }
+    }
 
     if (!mid) {
       return NextResponse.json({ 
@@ -199,18 +209,20 @@ export async function DELETE(req: Request) {
       const cartId = cartResult.rows[0].cart_id
       
       // 刪除購物車項目
-      await pool.query(
+      const deleteItemsResult = await pool.query(
         `DELETE FROM cart_items WHERE cart_id = $1`,
         [cartId]
       )
       
       // 刪除購物車
-      await pool.query(
+      const deleteCartResult = await pool.query(
         `DELETE FROM cart WHERE cart_id = $1`,
         [cartId]
       )
       
-      console.log("✅ 購物車已清空")
+      console.log(`✅ 購物車已清空，刪除 ${deleteItemsResult.rowCount} 個項目`)
+    } else {
+      console.log("ℹ️ 用戶沒有購物車需要清空")
     }
 
     return NextResponse.json({
