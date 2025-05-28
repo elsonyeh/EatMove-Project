@@ -1,0 +1,37 @@
+{
+  "recommendations": [
+    // 必要的開發工具
+    "esbenp.prettier-vscode",
+    "ms-vscode.vscode-typescript-next",
+    "bradlc.vscode-tailwindcss",
+    "ms-vscode.vscode-eslint",
+
+    // React/Next.js 開發
+    "dsznajder.es7-react-js-snippets",
+    "formulahendry.auto-rename-tag",
+    "christian-kohler.path-intellisense",
+
+    // Git 工具
+    "eamodio.gitlens",
+    "mhutchie.git-graph",
+
+    // 檔案管理
+    "christian-kohler.npm-intellisense",
+    "ms-vscode.vscode-json",
+
+    // 開發體驗增強
+    "usernamehw.errorlens",
+    "gruntfuggly.todo-tree",
+    "streetsidesoftware.code-spell-checker",
+
+    // 主題和圖示 (可選)
+    "pkief.material-icon-theme",
+    "github.github-vscode-theme"
+  ],
+  "unwantedRecommendations": [
+    // 避免安裝可能影響性能的擴充功能
+    "ms-vscode.vscode-typescript",
+    "hookyqr.beautify",
+    "ms-vscode.vscode-css-peek"
+  ]
+}

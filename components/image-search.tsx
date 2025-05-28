@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { useToast } from "@/components/ui/use-toast"
-import { Camera, Upload, Search, Trash2, Loader2, ImageIcon, Sparkles, ChefHat } from "lucide-react"
+import { Camera, Upload, Search, Trash2, Loader2, ImageIcon, Sparkles, ChefHat, Star, MapPin, Clock, DollarSign } from "lucide-react"
 import Image from "next/image"
 import { useRouter } from "next/navigation"
 import {
@@ -24,6 +24,12 @@ interface FoodClassification {
     description: string
 }
 
+interface MenuMatch {
+    name: string
+    price: number
+    category: string
+}
+
 interface RestaurantRecommendation {
     rid: number
     rname: string
@@ -34,6 +40,9 @@ interface RestaurantRecommendation {
     deliveryTime: string
     deliveryFee: number
     matchReason: string
+    matchScore: number
+    distance?: string
+    menuMatches: MenuMatch[]
 }
 
 interface ImageSearchProps {
@@ -61,117 +70,6 @@ export function ImageSearch({ onClose, isOpen = false }: ImageSearchProps) {
     const [isAnalyzing, setIsAnalyzing] = useState(false)
     const [foodClassification, setFoodClassification] = useState<FoodClassification | null>(null)
     const [recommendations, setRecommendations] = useState<RestaurantRecommendation[]>([])
-    const [modelLoaded, setModelLoaded] = useState(false)
-
-    // 載入TensorFlow.js模型
-    useEffect(() => {
-        const loadModel = async () => {
-            try {
-                // 這裡應該載入TensorFlow.js模型，暫時用模擬的方式
-                console.log("🧠 載入食物分類模型中...")
-                await new Promise(resolve => setTimeout(resolve, 1000)) // 模擬載入時間
-                setModelLoaded(true)
-                console.log("✅ 食物分類模型載入完成")
-            } catch (error) {
-                console.error("❌ 模型載入失敗:", error)
-                toast({
-                    title: "模型載入失敗",
-                    description: "食物分類功能暫時無法使用",
-                    variant: "destructive",
-                })
-            }
-        }
-
-        if (isOpen) {
-            loadModel()
-        }
-    }, [isOpen, toast])
-
-    const classifyFood = async (imageFile: File): Promise<FoodClassification> => {
-        // 模擬食物分類結果
-        // 在實際實作中，這裡會使用TensorFlow.js的MobileNet或專門的食物分類模型
-
-        const foodTypes = [
-            { category: "中式料理", foodType: "炒飯", confidence: 0.85, description: "看起來像是蛋炒飯或其他炒飯類料理" },
-            { category: "中式料理", foodType: "湯麵", confidence: 0.78, description: "可能是牛肉麵、雞湯麵等湯麵類" },
-            { category: "西式料理", foodType: "漢堡", confidence: 0.92, description: "經典的漢堡包，包含麵包、肉排和蔬菜" },
-            { category: "日式料理", foodType: "拉麵", confidence: 0.88, description: "日式拉麵，濃郁的湯頭配上麵條" },
-            { category: "西式料理", foodType: "披薩", confidence: 0.75, description: "義式披薩，薄餅皮搭配各種配料" },
-            { category: "中式料理", foodType: "餃子", confidence: 0.82, description: "包餡的餃子，可能是水餃或煎餃" },
-            { category: "點心甜品", foodType: "蛋糕", confidence: 0.79, description: "甜點蛋糕，適合當作餐後甜品" },
-            { category: "小吃類", foodType: "雞排", confidence: 0.86, description: "台式炸雞排，香脆可口的小吃" }
-        ]
-
-        // 隨機選擇一個分類結果來模擬
-        const randomIndex = Math.floor(Math.random() * foodTypes.length)
-        const result = foodTypes[randomIndex]
-
-        // 模擬分析時間
-        await new Promise(resolve => setTimeout(resolve, 2000))
-
-        return result
-    }
-
-    const getRestaurantRecommendations = async (foodClassification: FoodClassification): Promise<RestaurantRecommendation[]> => {
-        try {
-            console.log("🔍 根據食物分類搜尋餐廳:", foodClassification.category)
-
-            // 獲取所有餐廳
-            const response = await fetch('/api/restaurants')
-            const data = await response.json()
-
-            if (!data.success) {
-                throw new Error("獲取餐廳資料失敗")
-            }
-
-            // 根據食物分類篩選相關餐廳
-            const matchingRestaurants = data.restaurants.filter((restaurant: any) => {
-                const cuisine = restaurant.cuisine?.toLowerCase() || ""
-                const category = foodClassification.category.toLowerCase()
-
-                // 簡單的關鍵字匹配
-                if (category.includes("中式") && (cuisine.includes("中式") || cuisine.includes("台式") || cuisine.includes("中華"))) {
-                    return true
-                }
-                if (category.includes("日式") && cuisine.includes("日式")) {
-                    return true
-                }
-                if (category.includes("西式") && (cuisine.includes("西式") || cuisine.includes("美式") || cuisine.includes("義式"))) {
-                    return true
-                }
-                if (category.includes("韓式") && cuisine.includes("韓式")) {
-                    return true
-                }
-                if (category.includes("東南亞") && (cuisine.includes("泰式") || cuisine.includes("越南"))) {
-                    return true
-                }
-
-                // 如果沒有明確分類，使用部分匹配
-                return cuisine.includes(foodClassification.foodType) ||
-                    restaurant.rname.includes(foodClassification.foodType)
-            })
-
-            // 轉換為推薦格式
-            const recommendations: RestaurantRecommendation[] = matchingRestaurants
-                .slice(0, 6) // 最多6個推薦
-                .map((restaurant: any) => ({
-                    rid: restaurant.rid,
-                    rname: restaurant.rname,
-                    raddress: restaurant.raddress,
-                    image: restaurant.image || "/images/restaurants/default.jpg",
-                    rating: restaurant.rating || 4.0,
-                    cuisine: restaurant.cuisine || "美食",
-                    deliveryTime: "25-40分鐘",
-                    deliveryFee: restaurant.delivery_fee || 30,
-                    matchReason: `專門提供${foodClassification.category}，推薦度${Math.round(foodClassification.confidence * 100)}%`
-                }))
-
-            return recommendations
-        } catch (error) {
-            console.error("❌ 獲取餐廳推薦失敗:", error)
-            return []
-        }
-    }
 
     const handleFileSelect = useCallback(async (file: File) => {
         if (!file.type.startsWith('image/')) {
@@ -242,10 +140,10 @@ export function ImageSearch({ onClose, isOpen = false }: ImageSearchProps) {
     }
 
     const handleAnalyze = async () => {
-        if (!selectedFile || !modelLoaded) {
+        if (!selectedFile) {
             toast({
                 title: "錯誤",
-                description: "請先選擇圖片並等待模型載入完成",
+                description: "請先選擇圖片",
                 variant: "destructive",
             })
             return
@@ -262,39 +160,47 @@ export function ImageSearch({ onClose, isOpen = false }: ImageSearchProps) {
         })
 
         try {
-            // 分析食物類型
-            console.log("🔍 開始食物分類分析...")
-            const classification = await classifyFood(selectedFile)
-            setFoodClassification(classification)
+            // 準備FormData
+            const formData = new FormData()
+            formData.append("image", selectedFile)
+
+            // 調用新的AI食物分類API
+            const response = await fetch('/api/ai/food-classification', {
+                method: 'POST',
+                body: formData
+            })
+
+            const data = await response.json()
+
+            if (!data.success) {
+                throw new Error(data.message || "分析失敗")
+            }
+
+            // 設置分類結果
+            setFoodClassification(data.classification)
 
             // 顯示分類結果
             toast({
                 title: "🎯 識別完成！",
-                description: `識別為 ${classification.foodType}（${classification.category}），信心度 ${Math.round(classification.confidence * 100)}%`,
+                description: `識別為 ${data.classification.foodType}（${data.classification.category}），信心度 ${data.classification.confidence}%`,
             })
 
-            // 獲取餐廳推薦
-            console.log("🍽️ 獲取餐廳推薦...")
-            toast({
-                title: "🔍 搜尋餐廳",
-                description: `根據 ${classification.category} 為您推薦合適的餐廳...`,
-            })
+            // 設置餐廳推薦
+            setRecommendations(data.recommendations)
 
-            const restaurantRecommendations = await getRestaurantRecommendations(classification)
-            setRecommendations(restaurantRecommendations)
-
-            if (restaurantRecommendations.length === 0) {
+            if (data.recommendations.length === 0) {
                 toast({
                     title: "😔 暫無推薦",
-                    description: `目前沒有找到專門提供 ${classification.category} 的餐廳，請稍後再試`,
+                    description: `目前沒有找到專門提供 ${data.classification.category} 的餐廳，請稍後再試`,
                     variant: "destructive",
                 })
             } else {
                 toast({
                     title: "🎉 推薦完成！",
-                    description: `為您推薦了 ${restaurantRecommendations.length} 家${classification.category}餐廳`,
+                    description: `為您推薦了 ${data.recommendations.length} 家${data.classification.category}餐廳`,
                 })
             }
+
         } catch (error) {
             console.error("❌ 分析失敗:", error)
             toast({
@@ -334,34 +240,25 @@ export function ImageSearch({ onClose, isOpen = false }: ImageSearchProps) {
 
     return (
         <Dialog open={isOpen} onOpenChange={onClose}>
-            <DialogContent className="max-w-4xl max-h-[90vh] overflow-hidden">
+            <DialogContent className="max-w-5xl max-h-[90vh] overflow-hidden">
                 <DialogHeader>
                     <DialogTitle className="flex items-center">
                         <ChefHat className="h-5 w-5 mr-2 text-brand-primary" />
-                        AI食物分類識別
+                        AI 以圖搜餐 - 精準推薦
                     </DialogTitle>
                     <DialogDescription>
-                        上傳食物照片，AI會自動識別食物類型並推薦相關餐廳
+                        上傳食物照片，AI會精準識別食物類型並推薦有該料理的餐廳
                     </DialogDescription>
                 </DialogHeader>
 
-                <div className="grid gap-6 py-4">
-                    {/* 模型載入狀態 */}
-                    {!modelLoaded && (
-                        <Card>
-                            <CardContent className="p-4">
-                                <div className="flex items-center space-x-2 text-blue-600">
-                                    <Loader2 className="h-4 w-4 animate-spin" />
-                                    <span className="text-sm">載入AI食物分類模型中...</span>
-                                </div>
-                            </CardContent>
-                        </Card>
-                    )}
-
+                <div className="grid gap-6 py-4 max-h-[calc(90vh-120px)] overflow-y-auto">
                     {/* 圖片上傳區域 */}
                     <Card>
                         <CardHeader>
-                            <CardTitle className="text-lg">上傳食物照片</CardTitle>
+                            <CardTitle className="text-lg flex items-center">
+                                <Camera className="h-5 w-5 mr-2 text-brand-primary" />
+                                上傳食物照片
+                            </CardTitle>
                         </CardHeader>
                         <CardContent>
                             {!selectedFile ? (
@@ -375,7 +272,7 @@ export function ImageSearch({ onClose, isOpen = false }: ImageSearchProps) {
                                     <p className="text-lg font-medium mb-2">點擊或拖拽上傳食物照片</p>
                                     <p className="text-sm text-gray-500">
                                         支援 JPG、PNG、WebP 格式，最大 10MB<br />
-                                        AI會自動識別食物類型並推薦餐廳
+                                        AI會自動識別食物類型並推薦有該料理的餐廳
                                     </p>
                                     <Button className="mt-4" variant="outline">
                                         <Upload className="h-4 w-4 mr-2" />
@@ -416,18 +313,18 @@ export function ImageSearch({ onClose, isOpen = false }: ImageSearchProps) {
 
                                     <Button
                                         onClick={handleAnalyze}
-                                        disabled={isAnalyzing || !selectedFile}
+                                        disabled={isAnalyzing}
                                         className="w-full bg-brand-primary hover:bg-brand-primary/90"
                                     >
                                         {isAnalyzing ? (
                                             <>
                                                 <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                                                分析中...
+                                                AI 分析中...
                                             </>
                                         ) : (
                                             <>
-                                                <ChefHat className="h-4 w-4 mr-2" />
-                                                分析食物類型
+                                                <Sparkles className="h-4 w-4 mr-2" />
+                                                開始 AI 食物識別
                                             </>
                                         )}
                                     </Button>
@@ -449,21 +346,27 @@ export function ImageSearch({ onClose, isOpen = false }: ImageSearchProps) {
                         <Card>
                             <CardHeader>
                                 <CardTitle className="flex items-center">
-                                    <ChefHat className="h-5 w-5 mr-2 text-brand-primary" />
-                                    分析結果
+                                    <Sparkles className="h-5 w-5 mr-2 text-brand-primary" />
+                                    AI 識別結果
                                 </CardTitle>
                             </CardHeader>
                             <CardContent>
-                                <div className="space-y-2">
-                                    <p className="text-sm font-medium">
-                                        食物類型: {foodClassification.foodType}
-                                    </p>
-                                    <p className="text-sm font-medium">
-                                        信心度: {Math.round(foodClassification.confidence * 100)}%
-                                    </p>
-                                    <p className="text-sm font-medium">
-                                        描述: {foodClassification.description}
-                                    </p>
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                    <div className="text-center p-4 bg-blue-50 rounded-lg">
+                                        <p className="text-sm text-gray-600">料理類型</p>
+                                        <p className="text-lg font-bold text-blue-600">{foodClassification.category}</p>
+                                    </div>
+                                    <div className="text-center p-4 bg-green-50 rounded-lg">
+                                        <p className="text-sm text-gray-600">具體食物</p>
+                                        <p className="text-lg font-bold text-green-600">{foodClassification.foodType}</p>
+                                    </div>
+                                    <div className="text-center p-4 bg-purple-50 rounded-lg">
+                                        <p className="text-sm text-gray-600">信心度</p>
+                                        <p className="text-lg font-bold text-purple-600">{foodClassification.confidence}%</p>
+                                    </div>
+                                </div>
+                                <div className="mt-4 p-3 bg-gray-50 rounded-lg">
+                                    <p className="text-sm text-gray-700">{foodClassification.description}</p>
                                 </div>
                             </CardContent>
                         </Card>
@@ -473,20 +376,26 @@ export function ImageSearch({ onClose, isOpen = false }: ImageSearchProps) {
                     {recommendations.length > 0 && (
                         <Card>
                             <CardHeader>
-                                <CardTitle className="flex items-center">
-                                    <ChefHat className="h-5 w-5 mr-2 text-brand-primary" />
-                                    餐廳推薦
+                                <CardTitle className="flex items-center justify-between">
+                                    <div className="flex items-center">
+                                        <Search className="h-5 w-5 mr-2 text-brand-primary" />
+                                        精準餐廳推薦
+                                    </div>
+                                    <Badge variant="secondary">
+                                        {recommendations.length} 家餐廳
+                                    </Badge>
                                 </CardTitle>
                             </CardHeader>
                             <CardContent>
-                                <div className="max-h-96 overflow-y-auto space-y-3">
+                                <div className="grid gap-4">
                                     {recommendations.map((recommendation, index) => (
                                         <div
                                             key={`${recommendation.rid}-${index}`}
-                                            className="flex items-center space-x-4 p-3 border rounded-lg hover:bg-gray-50 cursor-pointer transition-colors"
+                                            className="flex items-start space-x-4 p-4 border rounded-lg hover:bg-gray-50 cursor-pointer transition-colors"
                                             onClick={() => handleRestaurantClick(recommendation)}
                                         >
-                                            <div className="relative w-16 h-16 rounded-lg overflow-hidden flex-shrink-0">
+                                            {/* 餐廳圖片 */}
+                                            <div className="relative w-20 h-20 rounded-lg overflow-hidden flex-shrink-0">
                                                 <Image
                                                     src={recommendation.image}
                                                     alt={recommendation.rname}
@@ -497,15 +406,67 @@ export function ImageSearch({ onClose, isOpen = false }: ImageSearchProps) {
                                                     }}
                                                 />
                                             </div>
+
+                                            {/* 餐廳資訊 */}
                                             <div className="flex-1 min-w-0">
-                                                <div className="flex items-center space-x-2 mb-1">
-                                                    <h3 className="font-medium truncate">{recommendation.rname}</h3>
-                                                    <Badge variant="secondary">
-                                                        {Math.round(recommendation.rating * 100)}% 評價
+                                                <div className="flex items-start justify-between mb-2">
+                                                    <div>
+                                                        <h3 className="font-bold text-lg truncate">{recommendation.rname}</h3>
+                                                        <div className="flex items-center space-x-2 text-sm text-gray-600">
+                                                            <Badge variant="outline" className="text-xs">
+                                                                {recommendation.cuisine}
+                                                            </Badge>
+                                                            <div className="flex items-center">
+                                                                <Star className="h-3 w-3 fill-yellow-400 text-yellow-400 mr-1" />
+                                                                <span>{recommendation.rating}</span>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                    <Badge
+                                                        variant="default"
+                                                        className="bg-brand-primary text-white"
+                                                    >
+                                                        匹配度 {recommendation.matchScore}%
                                                     </Badge>
                                                 </div>
-                                                <p className="text-sm text-gray-600 mb-1">{recommendation.raddress}</p>
-                                                <p className="text-sm font-medium text-brand-primary">NT$ {recommendation.deliveryFee}</p>
+
+                                                <div className="grid grid-cols-1 md:grid-cols-2 gap-2 mb-3">
+                                                    <div className="flex items-center text-sm text-gray-600">
+                                                        <MapPin className="h-3 w-3 mr-1" />
+                                                        <span className="truncate">{recommendation.raddress}</span>
+                                                    </div>
+                                                    <div className="flex items-center text-sm text-gray-600">
+                                                        <Clock className="h-3 w-3 mr-1" />
+                                                        <span>{recommendation.deliveryTime}</span>
+                                                    </div>
+                                                    <div className="flex items-center text-sm text-gray-600">
+                                                        <DollarSign className="h-3 w-3 mr-1" />
+                                                        <span>外送費 NT${recommendation.deliveryFee}</span>
+                                                    </div>
+                                                    <div className="text-sm text-brand-primary font-medium">
+                                                        {recommendation.matchReason}
+                                                    </div>
+                                                </div>
+
+                                                {/* 相關菜品 */}
+                                                {recommendation.menuMatches.length > 0 && (
+                                                    <div className="mt-3 p-3 bg-blue-50 rounded-lg">
+                                                        <p className="text-sm font-medium text-blue-800 mb-2">
+                                                            相關菜品：
+                                                        </p>
+                                                        <div className="flex flex-wrap gap-2">
+                                                            {recommendation.menuMatches.map((menu, idx) => (
+                                                                <Badge
+                                                                    key={idx}
+                                                                    variant="secondary"
+                                                                    className="text-xs bg-blue-100 text-blue-700"
+                                                                >
+                                                                    {menu.name} - NT${menu.price}
+                                                                </Badge>
+                                                            ))}
+                                                        </div>
+                                                    </div>
+                                                )}
                                             </div>
                                         </div>
                                     ))}

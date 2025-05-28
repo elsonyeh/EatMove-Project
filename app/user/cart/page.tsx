@@ -187,7 +187,7 @@ export default function CartPage() {
     }
 
     if (hasMultipleRestaurants && selectedRestaurants.size > 1) {
-      toast({
+    toast({
         title: "一次只能選擇一家餐廳",
         description: "請只選擇一家餐廳進行結帳",
         variant: "destructive",
@@ -245,19 +245,19 @@ export default function CartPage() {
                 {restaurantGroups.length} 家餐廳
               </Badge>
             )}
-          </div>
-          {cart.items.length > 0 && (
-            <Button
-              variant="outline"
+        </div>
+        {cart.items.length > 0 && (
+          <Button
+            variant="outline"
               size="sm"
               onClick={() => setShowClearDialog(true)}
               className="text-red-600 hover:text-red-700"
-            >
+          >
               <Trash2 className="h-4 w-4 mr-2" />
-              清空購物車
-            </Button>
-          )}
-        </div>
+            清空購物車
+          </Button>
+        )}
+      </div>
       </div>
 
       {/* 多餐廳警告 */}
@@ -300,7 +300,7 @@ export default function CartPage() {
                         <p className="text-sm text-muted-foreground">
                           {group.totalItems} 件商品 • NT$ {group.totalPrice}
                         </p>
-                      </div>
+                    </div>
                     </div>
                     {hasMultipleRestaurants && (
                       <Button
@@ -358,25 +358,25 @@ export default function CartPage() {
                               <Minus className="h-3 w-3" />
                             </Button>
                             <span className="w-8 text-center font-medium">{item.quantity}</span>
-                            <Button
-                              variant="outline"
+                      <Button
+                        variant="outline"
                               size="sm"
                               onClick={() => handleQuantityChange(item.cart_item_id, item.quantity + 1)}
                               disabled={updatingItems.has(item.cart_item_id)}
                             >
                               <Plus className="h-3 w-3" />
-                            </Button>
-                          </div>
+                      </Button>
+                    </div>
                           <div className="text-right">
                             <p className="font-medium">NT$ {item.price * item.quantity}</p>
                             <p className="text-sm text-muted-foreground">NT$ {item.price} / 份</p>
                           </div>
                         </div>
                       </div>
-                    </div>
-                  ))}
-                </CardContent>
-              </Card>
+                  </div>
+                ))}
+              </CardContent>
+            </Card>
             ))}
           </div>
 
@@ -409,20 +409,20 @@ export default function CartPage() {
                   </div>
                 ) : (
                   <div className="space-y-2">
-                    <div className="flex justify-between">
-                      <span>小計</span>
+                <div className="flex justify-between">
+                  <span>小計</span>
                       <span>NT$ {cart.totalPrice}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span>外送費</span>
+                </div>
+                <div className="flex justify-between">
+                  <span>外送費</span>
                       <span>NT$ 60</span>
-                    </div>
-                    <Separator />
+                </div>
+                <Separator />
                     <div className="flex justify-between font-medium text-lg">
-                      <span>總計</span>
+                  <span>總計</span>
                       <span>NT$ {cart.totalPrice + 60}</span>
                     </div>
-                  </div>
+                </div>
                 )}
 
                 <Button

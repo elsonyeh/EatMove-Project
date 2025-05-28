@@ -31,7 +31,7 @@ export default function CheckoutPage() {
   })
 
   // 獲取選中的餐廳ID
-  const selectedRestaurantId = searchParams.get('restaurant')
+  const selectedRestaurantId = searchParams?.get('restaurant')
 
   // 過濾選中餐廳的商品
   const filteredItems = useMemo(() => {
