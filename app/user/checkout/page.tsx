@@ -1,89 +1,95 @@
-"use client"
+"use client";
 
-import { useState, useEffect, useMemo } from "react"
-import { useRouter, useSearchParams } from "next/navigation"
-import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { Textarea } from "@/components/ui/textarea"
-import { Separator } from "@/components/ui/separator"
-import { useToast } from "@/components/ui/use-toast"
-import { useCartDB } from "@/hooks/use-cart-db"
-import { MapPin, CreditCard, Clock } from "lucide-react"
+import { useState, useEffect, useMemo, Suspense } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { Separator } from "@/components/ui/separator";
+import { useToast } from "@/components/ui/use-toast";
+import { useCartDB } from "@/hooks/use-cart-db";
+import { MapPin, CreditCard, Clock } from "lucide-react";
 
-export default function CheckoutPage() {
-  const router = useRouter()
-  const searchParams = useSearchParams()
-  const { toast } = useToast()
-  const { cart, clearCart, loading } = useCartDB()
-  const [orderNotes, setOrderNotes] = useState("")
-  const [isSubmitting, setIsSubmitting] = useState(false)
+function CheckoutContent() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const { toast } = useToast();
+  const { cart, clearCart, loading } = useCartDB();
+  const [orderNotes, setOrderNotes] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [userData, setUserData] = useState({
     name: "",
     address: "",
-    phone: ""
-  })
+    phone: "",
+  });
   const [formData, setFormData] = useState({
     name: "",
     phone: "",
-    address: ""
-  })
+    address: "",
+  });
 
   // 獲取選中的餐廳ID
-  const selectedRestaurantId = searchParams?.get('restaurant')
+  const selectedRestaurantId = searchParams?.get("restaurant");
 
   // 過濾選中餐廳的商品
   const filteredItems = useMemo(() => {
     if (!selectedRestaurantId) {
       // 如果沒有指定餐廳，返回所有項目（適用於單一餐廳情況）
-      return cart.items
+      return cart.items;
     }
-    return cart.items.filter(item => item.rid === parseInt(selectedRestaurantId))
-  }, [cart.items, selectedRestaurantId])
+    return cart.items.filter(
+      (item) => item.rid === parseInt(selectedRestaurantId)
+    );
+  }, [cart.items, selectedRestaurantId]);
 
   // 計算過濾後的總價
-  const filteredSubtotal = filteredItems.reduce((sum, item) => sum + (item.price * item.quantity), 0)
-  const deliveryFee = 60
-  const total = filteredSubtotal + deliveryFee
+  const filteredSubtotal = filteredItems.reduce(
+    (sum, item) => sum + item.price * item.quantity,
+    0
+  );
+  const deliveryFee = 60;
+  const total = filteredSubtotal + deliveryFee;
 
   // 獲取餐廳名稱
-  const restaurantName = filteredItems.length > 0 ? filteredItems[0].restaurantName : ""
+  const restaurantName =
+    filteredItems.length > 0 ? filteredItems[0].restaurantName : "";
 
   // 獲取用戶資料
   useEffect(() => {
     const fetchUserData = async () => {
       try {
-        const uid = localStorage.getItem("userId")
+        const uid = localStorage.getItem("userId");
         if (!uid) {
           toast({
             title: "錯誤",
             description: "請先登入",
             variant: "destructive",
-          })
-          router.push("/login")
-          return
+          });
+          router.push("/login");
+          return;
         }
 
-        const response = await fetch(`/api/user/profile?mid=${uid}`)
-        const data = await response.json()
+        const response = await fetch(`/api/user/profile?mid=${uid}`);
+        const data = await response.json();
 
         if (data.success) {
-          setUserData(data.data)
+          setUserData(data.data);
           // 設定表單初始值
           setFormData({
             name: data.data.name || "",
             phone: data.data.phonenumber || "",
-            address: data.data.address || ""
-          })
+            address: data.data.address || "",
+          });
         }
       } catch (error) {
-        console.error("獲取用戶資料失敗:", error)
+        console.error("獲取用戶資料失敗:", error);
       }
-    }
+    };
 
-    fetchUserData()
-  }, [toast, router])
+    fetchUserData();
+  }, [toast, router]);
 
   // 檢查購物車是否為空或無效選擇
   useEffect(() => {
@@ -93,9 +99,9 @@ export default function CheckoutPage() {
           title: "購物車為空",
           description: "請先添加商品到購物車",
           variant: "destructive",
-        })
-        router.push("/user/home")
-        return
+        });
+        router.push("/user/home");
+        return;
       }
 
       if (selectedRestaurantId && filteredItems.length === 0) {
@@ -103,49 +109,56 @@ export default function CheckoutPage() {
           title: "無效的餐廳選擇",
           description: "所選餐廳沒有商品，請返回購物車重新選擇",
           variant: "destructive",
-        })
-        router.push("/user/cart")
-        return
+        });
+        router.push("/user/cart");
+        return;
       }
     }
-  }, [loading, cart.items.length, filteredItems.length, selectedRestaurantId, toast, router])
+  }, [
+    loading,
+    cart.items.length,
+    filteredItems.length,
+    selectedRestaurantId,
+    toast,
+    router,
+  ]);
 
   const handleSubmitOrder = async () => {
     if (!formData.address.trim()) {
       toast({
         title: "錯誤",
         description: "請輸入外送地址",
-        variant: "destructive"
-      })
-      return
+        variant: "destructive",
+      });
+      return;
     }
 
     if (!formData.name.trim()) {
       toast({
         title: "錯誤",
         description: "請輸入收件人姓名",
-        variant: "destructive"
-      })
-      return
+        variant: "destructive",
+      });
+      return;
     }
 
     if (!formData.phone.trim()) {
       toast({
         title: "錯誤",
         description: "請輸入聯絡電話",
-        variant: "destructive"
-      })
-      return
+        variant: "destructive",
+      });
+      return;
     }
 
-    const uid = localStorage.getItem('userId')
+    const uid = localStorage.getItem("userId");
     if (!uid) {
       toast({
         title: "錯誤",
         description: "請先登入",
-        variant: "destructive"
-      })
-      return
+        variant: "destructive",
+      });
+      return;
     }
 
     // 檢查過濾後的項目
@@ -153,67 +166,67 @@ export default function CheckoutPage() {
       toast({
         title: "錯誤",
         description: "購物車資料異常，請重新添加商品",
-        variant: "destructive"
-      })
-      return
+        variant: "destructive",
+      });
+      return;
     }
 
-    setIsSubmitting(true)
+    setIsSubmitting(true);
 
     try {
       const orderData = {
         uid: uid,
         rid: filteredItems[0].rid, // 使用過濾後項目的餐廳ID
-        items: filteredItems.map(item => ({
+        items: filteredItems.map((item) => ({
           dishId: item.dishId,
           quantity: item.quantity,
           unitPrice: item.price,
           subtotal: item.price * item.quantity,
-          specialInstructions: item.specialInstructions || ""
+          specialInstructions: item.specialInstructions || "",
         })),
         deliveryAddress: formData.address,
         totalAmount: total,
         deliveryFee,
-        notes: orderNotes
-      }
+        notes: orderNotes,
+      };
 
-      console.log(`📦 準備提交訂單:`, orderData)
+      console.log(`📦 準備提交訂單:`, orderData);
 
-      const response = await fetch('/api/orders', {
-        method: 'POST',
+      const response = await fetch("/api/orders", {
+        method: "POST",
         headers: {
-          'Content-Type': 'application/json',
+          "Content-Type": "application/json",
         },
-        body: JSON.stringify(orderData)
-      })
+        body: JSON.stringify(orderData),
+      });
 
-      const result = await response.json()
+      const result = await response.json();
 
       if (result.success) {
         toast({
           title: "訂單提交成功",
-          description: "您的訂單已成功提交！"
-        })
-        await clearCart()
-        router.push(`/user/orders/${result.orderId}`)
+          description: "您的訂單已成功提交！",
+        });
+        await clearCart();
+        router.push(`/user/orders/${result.orderId}`);
       } else {
         toast({
           title: "訂單提交失敗",
           description: result.message || "訂單提交失敗",
-          variant: "destructive"
-        })
+          variant: "destructive",
+        });
       }
     } catch (error) {
-      console.error("提交訂單失敗:", error)
+      console.error("提交訂單失敗:", error);
       toast({
         title: "訂單提交失敗",
         description: "網路錯誤，請稍後再試",
-        variant: "destructive"
-      })
+        variant: "destructive",
+      });
     } finally {
-      setIsSubmitting(false)
+      setIsSubmitting(false);
     }
-  }
+  };
 
   if (loading) {
     return (
@@ -223,11 +236,11 @@ export default function CheckoutPage() {
           <p className="text-muted-foreground">載入中...</p>
         </div>
       </div>
-    )
+    );
   }
 
   if (filteredItems.length === 0) {
-    return null // 會被 useEffect 重導向
+    return null; // 會被 useEffect 重導向
   }
 
   return (
@@ -253,7 +266,9 @@ export default function CheckoutPage() {
                 <Input
                   id="name"
                   value={formData.name}
-                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                  onChange={(e) =>
+                    setFormData({ ...formData, name: e.target.value })
+                  }
                   placeholder="請輸入姓名"
                 />
               </div>
@@ -262,7 +277,9 @@ export default function CheckoutPage() {
                 <Input
                   id="phone"
                   value={formData.phone}
-                  onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                  onChange={(e) =>
+                    setFormData({ ...formData, phone: e.target.value })
+                  }
                   placeholder="請輸入電話號碼"
                 />
               </div>
@@ -271,7 +288,9 @@ export default function CheckoutPage() {
                 <Input
                   id="address"
                   value={formData.address}
-                  onChange={(e) => setFormData({ ...formData, address: e.target.value })}
+                  onChange={(e) =>
+                    setFormData({ ...formData, address: e.target.value })
+                  }
                   placeholder="請輸入詳細地址"
                 />
               </div>
@@ -292,12 +311,17 @@ export default function CheckoutPage() {
           <Card>
             <CardHeader>
               <CardTitle>訂單商品</CardTitle>
-              <p className="text-sm text-muted-foreground">來自 {restaurantName}</p>
+              <p className="text-sm text-muted-foreground">
+                來自 {restaurantName}
+              </p>
             </CardHeader>
             <CardContent>
               <div className="space-y-4">
                 {filteredItems.map((item) => (
-                  <div key={item.cart_item_id} className="flex items-center space-x-4 p-3 border border-gray-200 rounded-lg">
+                  <div
+                    key={item.cart_item_id}
+                    className="flex items-center space-x-4 p-3 border border-gray-200 rounded-lg"
+                  >
                     <div className="flex-1">
                       <h3 className="font-medium text-lg">{item.dishName}</h3>
                       <p className="text-sm text-muted-foreground">
@@ -353,5 +377,13 @@ export default function CheckoutPage() {
         </div>
       </div>
     </div>
-  )
+  );
+}
+
+export default function CheckoutPage() {
+  return (
+    <Suspense fallback={<div>Loading...</div>}>
+      <CheckoutContent />
+    </Suspense>
+  );
 }
